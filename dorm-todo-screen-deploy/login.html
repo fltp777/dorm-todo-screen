@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宿舍待办屏 · 登录</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="supabase-config.js" defer></script>
+    <script src="supabase-client.js" defer></script>
+    <script src="auth-store.js" defer></script>
+    <script src="auth-guard.js" defer></script>
+    <script src="login.js" defer></script>
+  </head>
+  <body class="editor-page auth-pending">
+    <main class="editor-shell login-shell">
+      <header class="editor-header">
+        <p class="eyebrow">PRIVATE SCREEN</p>
+        <h1>宿舍待办屏</h1>
+        <p class="subtitle">登录后访问你的私人屏幕。</p>
+      </header>
+
+      <form id="login-form" class="editor-card login-card">
+        <div class="login-field">
+          <label for="email">邮箱</label>
+          <input id="email" name="email" type="email" autocomplete="email" required>
+        </div>
+
+        <div class="login-field">
+          <label for="password">密码</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </div>
+
+        <div class="editor-actions">
+          <button id="login-button" type="submit">登录</button>
+          <span id="login-status" class="save-status" role="status" aria-live="polite"></span>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

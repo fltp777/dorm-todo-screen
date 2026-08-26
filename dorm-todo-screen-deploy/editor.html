@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宿舍待办屏 · 编辑</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="supabase-config.js" defer></script>
+    <script src="supabase-client.js" defer></script>
+    <script src="auth-store.js" defer></script>
+    <script src="screen-store.js" defer></script>
+    <script src="auth-guard.js" defer></script>
+    <script src="editor.js" defer></script>
+  </head>
+  <body class="editor-page auth-pending">
+    <main class="editor-shell">
+      <header class="editor-header">
+        <p class="eyebrow">DORM TODO SCREEN</p>
+        <h1>宿舍待办屏</h1>
+        <p class="subtitle">写下一段文字，同步到宿舍待办屏。</p>
+      </header>
+
+      <section class="editor-card" aria-labelledby="editor-label">
+        <div class="field-heading">
+          <label id="editor-label" for="todo-text">屏幕内容</label>
+          <output id="char-count" for="todo-text" aria-live="polite">0 / 300</output>
+        </div>
+        <textarea
+          id="todo-text"
+          maxlength="300"
+          rows="10"
+          placeholder="在这里输入想显示在宿舍屏幕上的文字……"
+        ></textarea>
+
+        <div class="editor-actions">
+          <button id="update-button" type="button">更新屏幕</button>
+          <span id="save-status" class="save-status" role="status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <nav class="editor-footer" aria-label="页面操作">
+        <a class="display-link" href="display.html" target="_blank" rel="noopener">查看显示页 <span aria-hidden="true">→</span></a>
+        <button id="logout-button" class="logout-button" type="button">退出登录</button>
+      </nav>
+    </main>
+  </body>
+</html>
