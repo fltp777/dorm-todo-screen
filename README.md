@@ -1,6 +1,6 @@
 # 宿舍电子待办屏
 
-当前阶段是 **Stage 2B-1：Nook BYOS 最小显示闭环**。
+当前状态是 **Stage 2B-1：COMPLETED / VERIFIED**。Nook BYOS 最小显示闭环已经通过公网与实机验收；**Stage 2B-2 尚未开始**。
 
 已完成并经用户真实验收：
 
@@ -10,6 +10,17 @@
 - Stage 1C-B 公网部署准备（随后已由用户完成 GitHub Pages/手机网络实测）：`becdc39`
 
 现有 GitHub Pages editor/display、Supabase Auth/RLS 和手机公网链路保持稳定。本轮新增独立 `server/`，不修改这些前端业务文件，也不读取 Supabase。
+
+## Stage 2B-1 实机验收结果
+
+- 设备：Nook Simple Touch BNRV300，Phoenix Project Phase 4 / FW 1.2.2。
+- 客户端：TRMNL Nook Client v0.16.0，Self-Hosted / BYOS 模式。
+- 公网服务：Render Free Web Service，Singapore region；当前服务可用。
+- `/health`、`/screen/test.png` 和带 `ID` + `access-token` 认证的 `/api/display` 均已通过公网验证。
+- Nook 通过手机热点成功访问 Render、下载并显示测试 PNG；当前刷新测试值为 300 秒。
+- 服务端输出 800×600 预旋转图，客户端旋转后在 Nook 上正确显示为 600×800 竖屏。
+- 四角方向标记、双边框、裁切和中文“测试成功”均已实机确认正常。
+- 校园网 PEAP 尚未测试；Render Free 冷启动及长期运行表现尚未验证。
 
 ## 当前硬件与 Stage 2B-1 架构
 

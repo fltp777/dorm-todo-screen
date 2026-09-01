@@ -1,5 +1,15 @@
 # Findings & Decisions — through Stage 2B-1
 
+## Stage 2B-1 Real-device Verification (2026-09-01)
+
+- **Stage 2B-1：COMPLETED / VERIFIED。** Nook BYOS 最小显示闭环已通过公网和 BNRV300 实机验收，Stage 2B-2 尚未开始。
+- 实机组合：Nook Simple Touch BNRV300、Phoenix Project Phase 4 / FW 1.2.2、TRMNL Nook Client v0.16.0、Self-Hosted / BYOS。
+- Render Free Web Service 部署在 Singapore region，当前服务可用；公网 `/health` 与 `/screen/test.png` 正常，`/api/display` 的 `ID` + `access-token` 认证和响应成功。
+- Nook 通过手机热点成功访问 Render、下载并显示测试 PNG；当前刷新测试值为 300 秒。
+- 服务端 800×600 预旋转图经客户端旋转后，在 Nook 上正确显示为 600×800 竖屏；TOP LEFT / TOP RIGHT / BOTTOM LEFT / BOTTOM RIGHT 方向正确，双边框完整、无明显裁切，中文“测试成功”正常。
+- 校园网 PEAP 尚未测试；Render Free 冷启动和长期运行表现尚未验证。这两项不影响本次最小显示闭环验收结论。
+- 本次仅记录用户提供的实机结果，不修改 server API、renderer、测试图、Supabase、Stage 1 网页、Nook 配置或 Render 配置。
+
 ## GitHub Remote Reconciliation (2026-08-31)
 - 已添加 `origin=https://github.com/fltp777/dorm-todo-screen.git` 并 fetch；远端默认分支为 `main`，最新为 `66c8ff2 Add files via upload`。
 - 远端存在 `origin/main`，不存在 `origin/master`；本地 `master` 最新为 `0e6a142 feat: add stage 2B-1 BYOS test server`。

@@ -1,10 +1,25 @@
-# Task Plan: Stage 2B-1 GitHub remote 核对与安全 push
+# Task Plan: Stage 2B-1 实机验收 checkpoint
 
 ## Goal
 为现有 GitHub repository 添加 origin，核对本地 master 与远端默认/main 历史和 Stage 1 runtime 完整性，仅在可证明安全时将 Stage 2B-1 整合到远端主分支；绝不 force push、删除分支或进入 Koyeb/Stage 2B-2。
 
 ## Current Phase
-Integration worktree created from origin/main — mapping and verification in progress
+Stage 2B-1 COMPLETED / VERIFIED；记录实机验收并创建文档 checkpoint。Stage 2B-2 尚未开始。
+
+## Real-device Acceptance Checkpoint (2026-09-01)
+
+- [x] Nook Simple Touch BNRV300 + Phoenix Phase 4 / FW 1.2.2 实机通过
+- [x] TRMNL Nook Client v0.16.0 Self-Hosted / BYOS 最小闭环通过
+- [x] Render Free Web Service（Singapore）公网 `/health`、`/api/display`、`/screen/test.png` 通过
+- [x] 手机热点访问、认证、PNG 下载和显示通过
+- [x] 800×600 预旋转图经客户端旋转后正确显示为 600×800 竖屏
+- [x] 四角方向、双边框、无明显裁切及中文显示通过
+- [x] 当前刷新测试值记录为 300 秒
+- [ ] 校园网 PEAP 验证
+- [ ] Render Free 冷启动与长期运行验证
+- [ ] Stage 2B-2（未开始）
+
+**Status:** complete — 本轮仅更新项目记录并 checkpoint，不修改服务端、网页、Nook 或 Render 配置。
 
 ## Verified Baselines
 - Stage 1A–1C 均已由用户真实验收。

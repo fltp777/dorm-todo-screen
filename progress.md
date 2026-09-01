@@ -1,5 +1,15 @@
 # Progress Log
 
+## Session: 2026-09-01 — Stage 2B-1 实机验收 checkpoint
+
+- **Stage 2B-1：COMPLETED / VERIFIED。** Nook BYOS 最小显示闭环已通过公网与 Nook Simple Touch BNRV300 实机验收；Stage 2B-2 尚未开始。
+- 已验证 Phoenix Project Phase 4 / FW 1.2.2、TRMNL Nook Client v0.16.0、Self-Hosted / BYOS 与 Render Free Web Service（Singapore）的完整链路。
+- Render 当前可用；公网 `/health`、`/screen/test.png` 正常，`/api/display` 认证和响应成功。
+- Nook 通过手机热点成功联网，下载并显示 800×600 预旋转 PNG；客户端旋转后得到正确的 600×800 竖屏结果。
+- 四角方向、双边框、裁切和中文“测试成功”均实机通过；当前刷新测试值为 300 秒。
+- 尚未验证校园网 PEAP，以及 Render Free 冷启动和长期运行表现。
+- 本轮范围仅为文档记录、secret 检查与 Git checkpoint；不修改任何运行时代码或外部配置。
+
 ## Session: 2026-08-31 — GitHub remote reconciliation
 
 - 已获得明确 remote URL；开始执行 add/fetch、main/master 历史与远端 Stage 1 runtime 核对。
