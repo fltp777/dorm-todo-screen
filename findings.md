@@ -1,5 +1,20 @@
 # Findings & Decisions — through Stage 2B-1
 
+## Stage 2B-2 Implementation Findings (2026-09-01)
+
+- 正式实现基线：`origin/main@a4b4a74`，隔离分支 `codex/stage-2b2-local`；Stage 1 runtime 和 Stage 2B-1 校准接口必须保持回归一致。
+- Supabase 新版 `sb_secret_...` key 不是 JWT。官方当前说明应把它放在 `apikey` request header；本实现不发送 `Authorization: Bearer <secret>`，不把 secret 放 URL、日志、异常、Nook 或前端。
+- provider 唯一 REST 请求固定为 `GET {SUPABASE_URL}/rest/v1/screen_state?id=eq.main&select=text,updated_at`；所有测试使用 `httpx.MockTransport`/测试值，不连接真实 Supabase。
+- 字体来源锁定官方 `notofonts/noto-cjk`：`Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf`，仅保留 Regular。对应 `Sans/LICENSE` 明确为 SIL Open Font License 1.1，允许随软件分发但必须附许可证。
+- Renderer 必须显式加载项目内 `server/assets/fonts/NotoSansCJKsc-Regular.otf`，不做系统字体 discovery；先绘制 upright 600×800，再 `ROTATE_90` 输出 800×600。
+- Sources:
+  - https://supabase.com/docs/guides/getting-started/api-keys
+  - https://github.com/notofonts/noto-cjk/tree/main/Sans/OTF/SimplifiedChinese
+  - https://github.com/notofonts/noto-cjk/blob/main/Sans/LICENSE
+- Bundled font SHA-256: `2C76254F6FC379FDDFCE0A7E84FB5385BB135D3E399294F6EEB6680D0365B74B`; bundled license SHA-256: `6A73F9541C2DE74158C0E7CF6B0A58EF774F5A780BF191F2D7EC9CC53EFE2BF2`.
+- Final local verification: Python compile passed; 48/48 unittest passed; diff check and secret scan passed; Stage 1 runtime 13/13 unchanged from `a4b4a74`; Stage 2B-1 calibration generator and PNG unchanged.
+- Stage 2B-2 is **LOCAL IMPLEMENTATION ONLY**, not deployed or device-verified. No live Supabase request was made.
+
 ## Stage 2B-1 Real-device Verification (2026-09-01)
 
 - **Stage 2B-1：COMPLETED / VERIFIED。** Nook BYOS 最小显示闭环已通过公网和 BNRV300 实机验收，Stage 2B-2 尚未开始。

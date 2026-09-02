@@ -1,6 +1,6 @@
 # 宿舍电子待办屏
 
-当前状态是 **Stage 2B-1：COMPLETED / VERIFIED**。Nook BYOS 最小显示闭环已经通过公网与实机验收；**Stage 2B-2 尚未开始**。
+当前状态：**Stage 2B-1：COMPLETED / VERIFIED**；**Stage 2B-2：LOCAL IMPLEMENTATION ONLY**。动态待办服务已完成本地代码与 mock 自动测试，但尚未部署，也未进行真实 editor → Supabase → Render → Nook 验收。
 
 已完成并经用户真实验收：
 
@@ -22,29 +22,48 @@
 - 四角方向标记、双边框、裁切和中文“测试成功”均已实机确认正常。
 - 校园网 PEAP 尚未测试；Render Free 冷启动及长期运行表现尚未验证。
 
-## 当前硬件与 Stage 2B-1 架构
+## Stage 2B-2 本地实现
+
+本地服务现已具备：
+
+- 通过 server-only Supabase secret 只读 `screen_state(id='main')` 的 `text,updated_at`；浏览器 publishable key、Auth 和现有 RLS 不变。
+- `TodoProvider` 将数据库行转换为 provider-neutral `NormalizedContent`，renderer 不直接访问 Supabase。
+- 使用随项目分发的 Noto Sans CJK SC Regular，将 300 字以内正文排成严格黑白 600×800 portrait，再逆时针预旋转为 800×600 PNG。
+- 使用 `updated_at` 派生内容版本；相同版本复用最多两个 artifact 的进程内缓存。
+- `/api/display` 继续校验 `ID` + `access-token`，只返回约 900 秒有效的 HMAC-SHA256 签名图片 URL，不返回正文或 server secret。
+- `/screen/current.png` 无需 Nook 额外 header，但必须通过 `v`、`exp`、`sig` 验证；Stage 2B-1 `/screen/test.png` 继续保留。
+
+本阶段尚未修改 Render 环境变量、部署新版服务或操作 Nook，因此不能标记为 verified。
+
+## 当前硬件与 Stage 2B-2 本地架构
 
 - 终端：Nook Simple Touch BNRV300
 - 系统：Phoenix Phase 4 / FW 1.2.2
 - 客户端：TRMNL Nook client v0.16.0
-- 当前目标：Self-Hosted/BYOS API 与固定校准图的实机闭环
+- 当前目标：动态待办图片链路的本地实现与部署前验证
 
 ```text
 GitHub Pages editor
         ↓
      Supabase
-  （本阶段暂不使用）
+  screen_state.main
+        ↓ server-only read
+ TodoProvider → NormalizedContent
+        ↓
+  black/white renderer
+        ↓
+ 800x600 pre-rotated PNG
 
 Nook v0.16.0
         ↓  ID + access-token
 BYOS GET /api/display
-        ↓  image_url
-固定 800x600 test image
+        ↓  signed image_url
+GET /screen/current.png?v=...&exp=...&sig=...
         ↓  客户端顺时针旋转
 预期 600x800 竖屏显示
 ```
 
-服务端代码、环境变量、本地测试和 Nook Easy Setup 说明见 [`server/README.md`](server/README.md)。Stage 2B-2 才会实现 Supabase text → renderer → Nook；本阶段没有动态文字渲染。
+服务端代码、环境变量、本地测试和部署前步骤见 [`server/README.md`](server/README.md)。当前只完成本地实现；真实公网与 Nook 验收仍待后续执行。
 
 ## 当前网站架构
 
@@ -80,6 +99,8 @@ Supabase Auth + PostgreSQL grants + RLS
 | `authenticated` | 是 | 是 | 否 | 否 |
 
 不要在项目中加入 secret/service-role key、数据库密码、用户密码或 session token。公网静态页面的源码和 publishable key 对访问者可见，这是预期行为；未登录用户仍会被数据库权限拒绝。
+
+Stage 2B-2 的 Supabase secret 仅允许作为 Render Environment Variable 存在。它绕过 RLS，因此服务端代码只执行固定的 `main` 行 SELECT，绝不把该 key 放入前端、Nook、URL、日志或 Git。
 
 ## 当前 Git 仓库情况
 
@@ -172,11 +193,11 @@ Supabase text + updated_at
 
 后续阶段：
 
-- Stage 2B-1（当前）：Nook → BYOS API → 固定测试图。
-- Stage 2B-2（后续）：Supabase text → 服务端黑白图片 → Nook。
+- Stage 2B-1（已实机验证）：Nook → BYOS API → 固定测试图。
+- Stage 2B-2（本地实现完成，待部署/实机验收）：Supabase text → 服务端黑白图片 → Nook。
 - Stage 2C（后续）：完善刷新、睡眠、唤醒和长期运行能力。
 
-硬件端不得重新开放 anon SELECT。当前 `/api/display` 使用独立 device ID/API key；固定校准图因 v0.16.0 下载图片时不转发认证 header 而暂时公开。Stage 2B-2 的真实内容图需使用短期签名 URL 或等价保护。
+硬件端不得重新开放 anon SELECT。`/api/display` 使用独立 device ID/API key；固定校准图继续公开用于诊断，真实内容图使用短期 HMAC 签名 URL，因为 v0.16.0 下载图片时不转发认证 header。
 
 ## 数据模型保持不变
 
@@ -187,4 +208,4 @@ screen_state
 └── updated_at
 ```
 
-`updated_at` 足够作为未来渲染内容版本。Stage 2B-1 不修改此模型；新增服务只返回固定测试图，不读取 Supabase。
+`updated_at` 作为动态渲染内容版本，不新增 version/image URL 列。Stage 2B-2 不修改此数据模型、grants 或 RLS。

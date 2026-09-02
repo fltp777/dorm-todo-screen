@@ -1,5 +1,27 @@
 # Progress Log
 
+## Session: 2026-09-02 — Stage 2B-2 checkpoint and PR preparation
+
+- 恢复 `codex/stage-2b2-local` worktree；未提交范围与上一轮本地交付一致，尚未 push/deploy。
+- 本轮将从最新 origin/main 做祖先/差异审计，重跑全部验收后仅 push 独立分支并准备 PR；Stage 2B-2 状态保持 LOCAL IMPLEMENTATION ONLY。
+- Fetch 后 `origin/main` 仍为 `a4b4a74`，与当前 HEAD/merge-base 相同；可安全创建单一后代 commit，不需 rebase/merge/force。
+- 提交前验收通过：compile、48/48 unittest、diff check、Stage 1 runtime 13/13、Stage 2B-1 校准资产/固定 endpoint/设备认证、字体集合/OFL、`.env`/secret/cache 扫描均通过。
+- staged PR diff 通过 23/23 allowlist：13 新增、10 修改、零删除；无 Stage 1/SQL/browser config 路径，无 unstaged 遗漏，`sb_secret_` 仅两个明确 placeholder。
+- 已创建单一 `feat: add stage 2B-2 dynamic todo rendering` commit；下一步仅 push 独立分支并核对 PR diff，不 push/merge main。
+
+## Session: 2026-09-01 — Stage 2B-2 local implementation
+
+- 从正式 `origin/main@a4b4a74` 创建隔离本地分支/worktree；本轮不 push。
+- 已复核 Stage 2B-1 config/routes/app/tests：固定图、设备认证、300 秒刷新和 800×600 方向基线保持不变。
+- 下一步：确认 Supabase 新版 secret header 与官方字体资产后，开始本地代码实现。
+- 已确认新版 server secret 使用 `apikey` header，不作为 Bearer JWT；官方 Noto CJK SC Regular + OFL 1.1 来源已定位。
+- 已加入官方 Regular 字体与 OFL 1.1；完成 NormalizedContent、TodoProvider、动态 renderer、HMAC signed URL、双版本线程安全 cache、DisplayService 和 API/config 组装。
+- `/screen/test.png` 保留；正式 `/screen/current.png` 使用短期 capability URL，失败响应不包含正文或 secret。
+- 首轮测试定位并修正空 cache 依赖注入的 truthiness bug；Pillow mode `1` 测试兼容内存 0/1 与重开 PNG 0/255 两种二值表示。
+- 最终 48 项 unittest 全部通过；增加真实 bundled font + renderer + FastAPI signed endpoint 集成测试。
+- Python compile、`git diff --check`、secret/.env 扫描通过；Stage 1 runtime 13/13 与 `a4b4a74` 一致，Stage 2B-1 校准 generator/PNG 不变。
+- Stage 2B-2 保持 **LOCAL IMPLEMENTATION ONLY**：未设置 Render env、未部署、未连接真实 Supabase、未操作 Nook。
+
 ## Session: 2026-09-01 — Stage 2B-1 实机验收 checkpoint
 
 - **Stage 2B-1：COMPLETED / VERIFIED。** Nook BYOS 最小显示闭环已通过公网与 Nook Simple Touch BNRV300 实机验收；Stage 2B-2 尚未开始。
