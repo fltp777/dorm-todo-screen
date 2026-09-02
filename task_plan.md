@@ -1,10 +1,35 @@
 # Task Plan: Stage 2B-1 实机验收 checkpoint
 
+## Stage 2B-2 Local Implementation (2026-09-01)
+
+**Goal:** 在 `a4b4a74` 基线上完成 TodoProvider → NormalizedContent → 中文黑白 renderer → 两版本缓存 → HMAC 短期图片 URL 的本地实现与自动测试；不使用真实 secret、不部署、不修改 Stage 1/RLS/Nook。
+
+- [x] 完整读取要求、恢复上下文、建立 `codex/stage-2b2-local` 隔离 worktree
+- [x] 复核新版 Supabase secret REST header、官方 Noto 字体与许可证
+- [x] 实现 content/provider/renderer/signing/cache/config/API
+- [x] 扩充 mock/unit/API/security/regression 测试（48/48 passing）
+- [x] 更新 README、server README 与 planning 记录
+- [x] compile、全部 unittest、diff check、secret scan、Stage 1 blob 回归
+
+**Status:** LOCAL IMPLEMENTATION ONLY — code/tests ready locally; not deployed or device-verified
+
+## Stage 2B-2 Checkpoint, Remote Integration & PR (2026-09-02)
+
+- [x] 恢复 worktree 并核对未提交实现范围
+- [x] fetch origin/main，验证当前分支祖先关系与无远端分歧（main/HEAD/merge-base 均为 `a4b4a74`）
+- [x] 重跑 compile、48 tests、diff check、secret/font/runtime/Stage 2B-1 回归
+- [x] 暂存后核对最终 PR diff、路径层级、无删除/secret（23/23 allowlist）
+- [x] 创建 `feat: add stage 2B-2 dynamic todo rendering` commit
+- [ ] push `codex/stage-2b2-local`，验证远端 hash
+- [ ] 创建或准备 PR 到 main，并复核最终 diff
+
+**Status:** in_progress — do not push/merge main; do not deploy
+
 ## Goal
 为现有 GitHub repository 添加 origin，核对本地 master 与远端默认/main 历史和 Stage 1 runtime 完整性，仅在可证明安全时将 Stage 2B-1 整合到远端主分支；绝不 force push、删除分支或进入 Koyeb/Stage 2B-2。
 
 ## Current Phase
-Stage 2B-1 COMPLETED / VERIFIED；记录实机验收并创建文档 checkpoint。Stage 2B-2 尚未开始。
+Stage 2B-1 COMPLETED / VERIFIED；Stage 2B-2 为 LOCAL IMPLEMENTATION ONLY，正在进行 checkpoint 与独立分支 PR 准备。
 
 ## Real-device Acceptance Checkpoint (2026-09-01)
 
@@ -17,7 +42,7 @@ Stage 2B-1 COMPLETED / VERIFIED；记录实机验收并创建文档 checkpoint�
 - [x] 当前刷新测试值记录为 300 秒
 - [ ] 校园网 PEAP 验证
 - [ ] Render Free 冷启动与长期运行验证
-- [ ] Stage 2B-2（未开始）
+- [ ] Stage 2B-2 部署与实机验收（本地实现已就绪）
 
 **Status:** complete — 本轮仅更新项目记录并 checkpoint，不修改服务端、网页、Nook 或 Render 配置。
 
@@ -78,6 +103,12 @@ Stage 2B-1 COMPLETED / VERIFIED；记录实机验收并创建文档 checkpoint�
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |-------|---------|------------|
+| 测试补丁在同一 patch 中同时 delete/add `test_app.py`，验证失败且未生效 | 1 | 拆为新增测试文件与单独更新现有测试文件，不重复同一路径操作 |
+| 首轮 47 tests：cache-miss/stale 两项失败 | 1 | `ArtifactCache.__len__` 使空 cache 为 falsy；将 app 注入从 `cache or ...` 改为显式 `cache is not None` |
+| 空状态黑白测试期待 0/255，但 Pillow mode `1` 的 `getcolors()` 返回 0/1 | 1 | 保持 renderer 严格 mode `1`，修正测试断言为 `{0, 1}` |
+| PNG 重新打开后的 mode `1` `getcolors()` 返回 0/255，与内存图的 0/1 表示不同 | 2 | 断言同时接受 Pillow 两种二值表示，并继续强制 image.mode == `1` |
+| 最终字体哈希命令已在 `server/` workdir，却再次使用 `server/assets/...` | 1 | 其他验收结果保留；改用 `assets/fonts/...` 正确相对路径单独重跑哈希 |
+| 沙箱账户执行 `git ls-remote` 遇到 Schannel `SEC_E_NO_CREDENTIALS` | 1 | fetch 已用获批宿主权限成功；远端分支/哈希核对改为统一使用获批网络权限，不重复沙箱调用 |
 | `git ls-remote` 公开仓库失败：Schannel `SEC_E_NO_CREDENTIALS` | 1 | 记录后申请提升网络权限，只读核对 tag/source |
 | clone 成功后 `rg` 仍使用项目 workdir，未扫描临时仓库 | 1 | 使用已确认临时绝对路径作为 workdir 重跑，不重复 clone |
 | 按常见 Gradle 结构读取 `app/src/main/java` 失败 | 1 | 定位仓库文件后改用实际 Ant 结构 `src/com/bpmct/...` |
