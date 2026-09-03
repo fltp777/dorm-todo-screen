@@ -1,4 +1,14 @@
-# Findings & Decisions — through Stage 2B-1
+# Findings & Decisions — through Stage 2B-2 verification
+
+## Stage 2B-2 Real-device Verification (2026-09-03)
+
+- **Stage 2B-2：COMPLETED / VERIFIED。** GitHub main 已包含实现（implementation `c4bcddc`，PR merge `fb5cb27`），真实端到端链路已在 Nook Simple Touch BNRV300 上通过。
+- 已验证链路为：手机 editor → 真实 Supabase `screen_state.main` → Render/FastAPI → TodoProvider → NormalizedContent → 中文 renderer → 800×600 预旋转黑白 PNG → 短期 signed image URL → TRMNL Nook Client v0.16.0 → Nook 实际显示。
+- 动态内容来自真实 Supabase，不是 mock、test fixture 或固定 TEST 01 图；Nook 显示的是手机输入的同一份真实内容。
+- 公网 `/health`、设备认证 `/api/display`、包含 `v`/`exp`/`sig` 的动态 URL 以及无额外 header 的图片下载均已实际通过；记录中不保存完整签名 URL。
+- 中文字体、中文/英文与用户手动换行正常。Stage 2B-1 已验证的 800×600 预旋转规则继续成立，不因拍照或设备摆放方向调整 renderer。
+- 当前已验证网络为手机热点，刷新测试值为 300 秒。校园网 PEAP、Render Free 长期 spin-down/cold-start、正式刷新周期仍是独立后续事项；Auto-Deploy 当前人为设为 Off。
+- poetry、quote、countdown、calendar、外壳/磁吸安装和长期供电尚未开始，不构成本阶段 VERIFIED 的阻塞项。
 
 ## Stage 2B-2 Implementation Findings (2026-09-01)
 

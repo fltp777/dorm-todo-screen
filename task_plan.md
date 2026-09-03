@@ -1,4 +1,16 @@
-# Task Plan: Stage 2B-1 实机验收 checkpoint
+# Task Plan: Stage 2B-2 实机验收 checkpoint
+
+## Stage 2B-2 Verified Checkpoint (2026-09-03)
+
+- [x] fetch 并确认最新 `origin/main@fb5cb277e6d05b8b16a9b860929024ffc29db9ce`
+- [x] 确认实现提交 `c4bcddc53b98fbdbe0d0c544aae45a8f3e14bce1` 已进入 main
+- [x] 从最新 origin/main 创建干净的 `codex/stage-2b2-verified-checkpoint`
+- [x] 更新 README、server README 与 planning 记录，只记录实机验收状态
+- [x] 复核 diff 仅含文档，并完成 secret、Stage 1 与 server 业务代码保护检查
+- [x] 创建 `chore: checkpoint verified stage 2B-2` commit
+- [ ] push 独立 checkpoint 分支并准备 PR 到 main（不 merge）
+
+**Status:** checkpoint_ready — 文档、secret 与回归检查通过；只待提交、push 独立分支并准备 PR，不修改或部署任何业务代码。
 
 ## Stage 2B-2 Local Implementation (2026-09-01)
 
@@ -11,7 +23,7 @@
 - [x] 更新 README、server README 与 planning 记录
 - [x] compile、全部 unittest、diff check、secret scan、Stage 1 blob 回归
 
-**Status:** LOCAL IMPLEMENTATION ONLY — code/tests ready locally; not deployed or device-verified
+**Status:** historical local implementation checkpoint — 此后已完成部署及 BNRV300 实机验收，当前状态见上方 verified checkpoint。
 
 ## Stage 2B-2 Checkpoint, Remote Integration & PR (2026-09-02)
 
@@ -20,16 +32,16 @@
 - [x] 重跑 compile、48 tests、diff check、secret/font/runtime/Stage 2B-1 回归
 - [x] 暂存后核对最终 PR diff、路径层级、无删除/secret（23/23 allowlist）
 - [x] 创建 `feat: add stage 2B-2 dynamic todo rendering` commit
-- [ ] push `codex/stage-2b2-local`，验证远端 hash
-- [ ] 创建或准备 PR 到 main，并复核最终 diff
+- [x] push `codex/stage-2b2-local`，验证远端 hash
+- [x] 创建 PR 到 main，并复核最终 diff；实现已由 merge commit `fb5cb27` 进入 main
 
-**Status:** in_progress — do not push/merge main; do not deploy
+**Status:** complete — implementation commit `c4bcddc` 已通过 PR 安全集成到 main。
 
 ## Goal
 为现有 GitHub repository 添加 origin，核对本地 master 与远端默认/main 历史和 Stage 1 runtime 完整性，仅在可证明安全时将 Stage 2B-1 整合到远端主分支；绝不 force push、删除分支或进入 Koyeb/Stage 2B-2。
 
 ## Current Phase
-Stage 2B-1 COMPLETED / VERIFIED；Stage 2B-2 为 LOCAL IMPLEMENTATION ONLY，正在进行 checkpoint 与独立分支 PR 准备。
+Stage 2B-1 COMPLETED / VERIFIED；Stage 2B-2 COMPLETED / VERIFIED。当前只记录真实端到端实机验收结果并建立文档 checkpoint。
 
 ## Real-device Acceptance Checkpoint (2026-09-01)
 
@@ -40,9 +52,9 @@ Stage 2B-1 COMPLETED / VERIFIED；Stage 2B-2 为 LOCAL IMPLEMENTATION ONLY，正
 - [x] 800×600 预旋转图经客户端旋转后正确显示为 600×800 竖屏
 - [x] 四角方向、双边框、无明显裁切及中文显示通过
 - [x] 当前刷新测试值记录为 300 秒
-- [ ] 校园网 PEAP 验证
-- [ ] Render Free 冷启动与长期运行验证
-- [ ] Stage 2B-2 部署与实机验收（本地实现已就绪）
+- [x] Stage 2B-2 部署与实机验收：真实 Supabase 动态内容、signed image URL 与 BNRV300 显示链路通过
+- [ ] 校园网 PEAP 验证（后续独立任务）
+- [ ] Render Free spin-down / cold-start 长期表现验证
 
 **Status:** complete — 本轮仅更新项目记录并 checkpoint，不修改服务端、网页、Nook 或 Render 配置。
 
