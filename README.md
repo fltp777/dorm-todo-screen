@@ -1,6 +1,6 @@
 # 宿舍电子待办屏
 
-当前状态：**Stage 2B-1：COMPLETED / VERIFIED**；**Stage 2B-2：LOCAL IMPLEMENTATION ONLY**。动态待办服务已完成本地代码与 mock 自动测试，但尚未部署，也未进行真实 editor → Supabase → Render → Nook 验收。
+当前状态：**Stage 2B-1：COMPLETED / VERIFIED**；**Stage 2B-2：COMPLETED / VERIFIED**。动态待办服务已部署到 Render，并在 Nook Simple Touch BNRV300 上完成真实 editor → Supabase → Render → Nook 端到端验收。
 
 已完成并经用户真实验收：
 
@@ -9,7 +9,7 @@
 - Stage 1C-A 邮箱密码登录与私有访问：`e55a12c`
 - Stage 1C-B 公网部署准备（随后已由用户完成 GitHub Pages/手机网络实测）：`becdc39`
 
-现有 GitHub Pages editor/display、Supabase Auth/RLS 和手机公网链路保持稳定。本轮新增独立 `server/`，不修改这些前端业务文件，也不读取 Supabase。
+现有 GitHub Pages editor/display、Supabase Auth/RLS 和手机公网链路保持稳定。Stage 2B-2 的服务端动态读取链路未改变前端业务文件、数据库结构或 RLS。
 
 ## Stage 2B-1 实机验收结果
 
@@ -22,9 +22,9 @@
 - 四角方向标记、双边框、裁切和中文“测试成功”均已实机确认正常。
 - 校园网 PEAP 尚未测试；Render Free 冷启动及长期运行表现尚未验证。
 
-## Stage 2B-2 本地实现
+## Stage 2B-2 实机验收结果
 
-本地服务现已具备：
+以下动态链路已经在公网和真实设备上通过：
 
 - 通过 server-only Supabase secret 只读 `screen_state(id='main')` 的 `text,updated_at`；浏览器 publishable key、Auth 和现有 RLS 不变。
 - `TodoProvider` 将数据库行转换为 provider-neutral `NormalizedContent`，renderer 不直接访问 Supabase。
@@ -33,14 +33,19 @@
 - `/api/display` 继续校验 `ID` + `access-token`，只返回约 900 秒有效的 HMAC-SHA256 签名图片 URL，不返回正文或 server secret。
 - `/screen/current.png` 无需 Nook 额外 header，但必须通过 `v`、`exp`、`sig` 验证；Stage 2B-1 `/screen/test.png` 继续保留。
 
-本阶段尚未修改 Render 环境变量、部署新版服务或操作 Nook，因此不能标记为 verified。
+- Render 构建及 FastAPI 启动成功，公网 `/health`、设备认证 `/api/display` 与动态 signed image URL 均正常。
+- Render 从真实 Supabase `screen_state.main` 读取手机网页保存的内容，而不是 mock、test fixture 或固定 TEST 01 校准图。
+- 浏览器与 TRMNL Nook Client v0.16.0 均成功下载同一份动态 PNG；Nook 已显示真实手机输入内容。
+- 中文字体、中文/英文及用户手动换行显示正常。
+- 服务端继续输出已经 Stage 2B-1 实机确认的 800×600 预旋转图；不因照片或设备摆放方向修改 renderer 旋转逻辑。
+- 已验证网络仍为手机热点；校园网 PEAP 留作后续独立任务。
 
-## 当前硬件与 Stage 2B-2 本地架构
+## 当前硬件与 Stage 2B-2 架构
 
 - 终端：Nook Simple Touch BNRV300
 - 系统：Phoenix Phase 4 / FW 1.2.2
 - 客户端：TRMNL Nook client v0.16.0
-- 当前目标：动态待办图片链路的本地实现与部署前验证
+- 当前状态：动态待办图片链路已完成公网部署与实机验收
 
 ```text
 GitHub Pages editor
@@ -63,7 +68,7 @@ GET /screen/current.png?v=...&exp=...&sig=...
 预期 600x800 竖屏显示
 ```
 
-服务端代码、环境变量、本地测试和部署前步骤见 [`server/README.md`](server/README.md)。当前只完成本地实现；真实公网与 Nook 验收仍待后续执行。
+服务端代码、环境变量、安全边界和测试说明见 [`server/README.md`](server/README.md)。真实公网与 Nook 验收已经完成；任何 secret 仍只保存在 Render 环境变量中。
 
 ## 当前网站架构
 
@@ -194,8 +199,10 @@ Supabase text + updated_at
 后续阶段：
 
 - Stage 2B-1（已实机验证）：Nook → BYOS API → 固定测试图。
-- Stage 2B-2（本地实现完成，待部署/实机验收）：Supabase text → 服务端黑白图片 → Nook。
+- Stage 2B-2（已实机验证）：真实 Supabase text → 服务端动态黑白图片 → signed image URL → Nook。
 - Stage 2C（后续）：完善刷新、睡眠、唤醒和长期运行能力。
+
+当前已验证刷新间隔仍为 300 秒，且 Render Auto-Deploy 人为设为 Off。校园网 PEAP、Render Free spin-down / cold-start 长期表现、正式日常刷新周期、长期供电与外壳安装仍待后续处理；poetry、quote、countdown 和 calendar 尚未实现。这些事项不影响 Stage 2B-2 的 VERIFIED 结论。
 
 硬件端不得重新开放 anon SELECT。`/api/display` 使用独立 device ID/API key；固定校准图继续公开用于诊断，真实内容图使用短期 HMAC 签名 URL，因为 v0.16.0 下载图片时不转发认证 header。
 

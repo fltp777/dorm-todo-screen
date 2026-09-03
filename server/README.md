@@ -1,6 +1,6 @@
 # Stage 2B-2 dynamic todo BYOS server
 
-Status: **LOCAL IMPLEMENTATION ONLY**. Stage 2B-1 remains device-verified; this dynamic Supabase path has not yet been deployed or tested on the Nook.
+Status: **COMPLETED / VERIFIED**. Stage 2B-1 remains device-verified, and the Stage 2B-2 dynamic Supabase path has now passed real end-to-end testing on a Nook Simple Touch BNRV300.
 
 ```text
 screen_state.main
@@ -15,6 +15,16 @@ screen_state.main
 ```
 
 The existing GitHub Pages frontend, Supabase Auth/RLS, and Stage 2B-1 calibration image are intentionally unchanged.
+
+## Real-device verification
+
+- Render built and started the FastAPI service successfully; public `/health` and authenticated `/api/display` requests passed.
+- The deployed server read `screen_state.main` from the real Supabase project, not from a mock or test fixture.
+- `/api/display` returned a dynamic image URL containing `v`, `exp`, and `sig`; the signed URL was successfully opened over public HTTPS.
+- The browser and TRMNL Nook Client v0.16.0 downloaded the rendered PNG, and the BNRV300 displayed the same real content entered from the phone editor.
+- Chinese, English, the bundled CJK font, and user-authored line breaks rendered correctly.
+- The already verified 800×600 pre-rotation rule remains unchanged and produced the correct final Nook display.
+- The verified network path used a phone hotspot. Campus PEAP remains a separate follow-up task.
 
 ## Security model
 
@@ -103,9 +113,9 @@ python -m unittest discover -s tests -v
 
 The suite covers provider REST shape/headers and failures, normalized versions, Chinese/manual/automatic wrapping, 300-character and pathological layouts, exact PNG orientation/size, signing tampering/expiry, `compare_digest`, two-version cache behavior, last-known-good fallback, device authentication, signed image delivery, cache-miss rebuild, stale rejection, and Stage 2B-1 regression.
 
-## Deployment boundary
+## Deployment status and boundary
 
-This implementation has not changed Render or the Nook. Before deployment, add the three required server-only variables to Render:
+The real Render deployment uses the following server-only variables; their values must remain only in Render and must never be copied into this repository:
 
 ```text
 SUPABASE_URL
@@ -113,4 +123,4 @@ SUPABASE_SECRET_KEY
 SCREEN_SIGNING_SECRET
 ```
 
-Optionally add `SCREEN_URL_TTL_SECONDS=900`. Keep the existing four Nook/public URL/refresh variables unchanged. After deployment, verify browser access to `/health`, authenticated `/api/display`, the returned signed PNG, and finally the real editor → Supabase → Render → Nook chain before marking Stage 2B-2 verified.
+`SCREEN_URL_TTL_SECONDS=900` remains optional. The existing Nook/public URL variables are retained, and the current tested refresh interval is 300 seconds. The real editor → Supabase → Render → signed PNG → Nook chain is verified. Render Free spin-down/cold-start behavior has not yet been observed long term, Auto-Deploy is currently Off, and the long-term refresh interval is not yet decided.

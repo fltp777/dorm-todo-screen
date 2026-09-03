@@ -1,5 +1,15 @@
 # Progress Log
 
+## Session: 2026-09-03 — Stage 2B-2 实机验收 checkpoint
+
+- **Stage 2B-1：COMPLETED / VERIFIED；Stage 2B-2：COMPLETED / VERIFIED。**
+- 已确认 `origin/main@fb5cb277e6d05b8b16a9b860929024ffc29db9ce` 包含 Stage 2B-2 实现提交 `c4bcddc53b98fbdbe0d0c544aae45a8f3e14bce1`，并从最新 main 创建独立文档 checkpoint 分支。
+- 用户已真实验证手机 editor → Supabase `screen_state.main` → Render/FastAPI → provider/content/renderer → signed PNG → TRMNL v0.16.0 → BNRV300 的完整链路。
+- 动态图片来自真实 Supabase，浏览器和 Nook 均成功获取；Nook 显示真实手机输入内容，中文/英文及手动换行正常。
+- 保持 Stage 2B-1 已验证的 800×600 预旋转逻辑不变；本轮不修改 server、renderer、signed URL、网页、Supabase/RLS、Render 或 Nook 配置。
+- 手机热点是当前已验证网络；校园 PEAP、Render Free 长期冷启动表现和正式刷新周期留待后续。当前测试刷新间隔仍为 300 秒，Auto-Deploy 为 Off。
+- 本 checkpoint 不记录任何设备凭据、服务器 secret、完整签名 URL 或用户实际待办正文。
+
 ## Session: 2026-09-02 — Stage 2B-2 checkpoint and PR preparation
 
 - 恢复 `codex/stage-2b2-local` worktree；未提交范围与上一轮本地交付一致，尚未 push/deploy。
