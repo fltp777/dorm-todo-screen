@@ -5,7 +5,14 @@ from datetime import datetime, timezone
 
 import httpx
 
-from content import NormalizedContent, content_version, normalize_body
+from content import (
+    NormalizedContent,
+    battery_percent_from_state,
+    battery_state,
+    content_version,
+    display_version,
+    normalize_body,
+)
 from providers.todo import TodoProvider, TodoProviderError
 
 
@@ -20,6 +27,24 @@ class ContentTests(unittest.TestCase):
         self.assertEqual(content_version(first), content_version(same_time))
         self.assertNotEqual(content_version(first), content_version(later))
         self.assertRegex(content_version(first), r"^[0-9a-f]{20}$")
+
+    def test_display_version_combines_content_and_battery_state(self) -> None:
+        item = NormalizedContent("todo", "A", datetime(2026, 9, 1, tzinfo=timezone.utc))
+        self.assertEqual(display_version(item, 63), display_version(item, 63))
+        self.assertNotEqual(display_version(item, 63), display_version(item, 62))
+        self.assertNotEqual(display_version(item, 63), display_version(item, None))
+        self.assertRegex(display_version(item, 63), r"^[0-9a-f]{20}$")
+
+    def test_battery_state_is_canonical_and_strict(self) -> None:
+        self.assertEqual(battery_state(None), "none")
+        self.assertEqual(battery_state(0), "0")
+        self.assertEqual(battery_state(100), "100")
+        self.assertIsNone(battery_percent_from_state("none"))
+        self.assertEqual(battery_percent_from_state("63"), 63)
+        for invalid in ("", "063", "101", "-1", "57%", "57.0"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    battery_percent_from_state(invalid)
 
     def test_requires_timezone_aware_updated_at(self) -> None:
         with self.assertRaises(ValueError):

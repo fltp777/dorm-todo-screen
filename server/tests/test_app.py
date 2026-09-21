@@ -38,12 +38,12 @@ class PngRenderer:
         self.calls = 0
         self.fail = False
 
-    def render(self, content: NormalizedContent) -> bytes:
+    def render(self, content: NormalizedContent, battery_percent: int | None = None) -> bytes:
         self.calls += 1
         if self.fail:
             raise RuntimeError("renderer failure")
         image = Image.new("1", (800, 600), color=1)
-        image.putpixel((0, 0), 0 if content.body else 255)
+        image.putpixel((0, 0), 0 if battery_percent is not None else 255)
         output = io.BytesIO()
         image.save(output, format="PNG")
         return output.getvalue()
@@ -80,8 +80,11 @@ class ByosApiTests(unittest.TestCase):
         )
         self.headers = {"ID": "aa-bb-cc-dd-ee-ff", "access-token": "test-only-nook-key"}
 
-    def display(self):
-        return self.client.get("/api/display", headers=self.headers)
+    def display(self, battery: str | None = None):
+        headers = dict(self.headers)
+        if battery is not None:
+            headers["Percent-Charged"] = battery
+        return self.client.get("/api/display", headers=headers)
 
     def test_health(self) -> None:
         response = self.client.get("/health")
@@ -89,13 +92,14 @@ class ByosApiTests(unittest.TestCase):
         self.assertEqual(response.json(), {"status": "ok"})
 
     def test_display_returns_dynamic_signed_url_and_refresh_rate(self) -> None:
-        response = self.display()
+        response = self.display("63")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         parsed = urlparse(payload["image_url"])
         query = parse_qs(parsed.query)
         self.assertEqual(parsed.path, "/screen/current.png")
-        self.assertEqual(set(query), {"v", "exp", "sig"})
+        self.assertEqual(set(query), {"v", "b", "exp", "sig"})
+        self.assertEqual(query["b"], ["63"])
         self.assertEqual(payload["refresh_rate"], 300)
         self.assertTrue(payload["filename"].startswith("todo-"))
         serialized = response.text
@@ -131,7 +135,7 @@ class ByosApiTests(unittest.TestCase):
         self.assertEqual(image.size, (800, 600))
 
     def test_signed_current_image_success(self) -> None:
-        image_url = self.display().json()["image_url"]
+        image_url = self.display("63").json()["image_url"]
         parsed = urlparse(image_url)
         response = self.client.get(f"{parsed.path}?{parsed.query}")
         self.assertEqual(response.status_code, 200)
@@ -149,7 +153,7 @@ class ByosApiTests(unittest.TestCase):
                 signer=self.signer,
             )
         )
-        display = client.get("/api/display", headers=self.headers)
+        display = client.get("/api/display", headers={**self.headers, "Percent-Charged": "63"})
         parsed = urlparse(display.json()["image_url"])
         response = client.get(f"{parsed.path}?{parsed.query}")
         image = Image.open(io.BytesIO(response.content))
@@ -158,21 +162,23 @@ class ByosApiTests(unittest.TestCase):
         self.assertEqual(image.size, (800, 600))
 
     def test_invalid_signed_image_urls_are_rejected(self) -> None:
-        image_url = self.display().json()["image_url"]
+        image_url = self.display("63").json()["image_url"]
         parsed = urlparse(image_url)
         query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
         cases = [
             "/screen/current.png",
-            f"/screen/current.png?v={query['v']}&exp={query['exp']}&sig=wrong",
-            f"/screen/current.png?v={'f' * 20}&exp={query['exp']}&sig={query['sig']}",
-            f"/screen/current.png?v={query['v']}&exp=invalid&sig={query['sig']}",
+            f"/screen/current.png?v={query['v']}&b={query['b']}&exp={query['exp']}&sig=wrong",
+            f"/screen/current.png?v={query['v']}&b=62&exp={query['exp']}&sig={query['sig']}",
+            f"/screen/current.png?v={'f' * 20}&b={query['b']}&exp={query['exp']}&sig={query['sig']}",
+            f"/screen/current.png?v={query['v']}&b={query['b']}&exp=invalid&sig={query['sig']}",
+            f"/screen/current.png?v={query['v']}&b=101&exp={query['exp']}&sig={query['sig']}",
         ]
         for path in cases:
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 403)
 
     def test_cache_miss_rebuilds_matching_version(self) -> None:
-        image_url = self.display().json()["image_url"]
+        image_url = self.display("63").json()["image_url"]
         self.cache.clear()
         calls_before = self.provider.calls
         parsed = urlparse(image_url)
@@ -181,7 +187,7 @@ class ByosApiTests(unittest.TestCase):
         self.assertEqual(self.provider.calls, calls_before + 1)
 
     def test_stale_version_is_rejected_after_cache_miss(self) -> None:
-        image_url = self.display().json()["image_url"]
+        image_url = self.display("63").json()["image_url"]
         self.cache.clear()
         self.provider.content = NormalizedContent(
             "todo",
@@ -221,6 +227,32 @@ class ByosApiTests(unittest.TestCase):
         )
         second = self.display().json()
         self.assertNotEqual(first["filename"], second["filename"])
+
+    def test_valid_battery_headers_are_normalized_into_signed_urls(self) -> None:
+        for raw in ("100", "63", "20", "19", "10", "9", "0"):
+            with self.subTest(raw=raw):
+                response = self.display(raw)
+                self.assertEqual(response.status_code, 200)
+                query = parse_qs(urlparse(response.json()["image_url"]).query)
+                self.assertEqual(query["b"], [raw])
+
+    def test_missing_or_invalid_battery_headers_keep_api_available(self) -> None:
+        for raw in (None, "", "57%", "57.0", "abc", "101", "-1"):
+            with self.subTest(raw=raw):
+                response = self.display(raw)
+                self.assertEqual(response.status_code, 200)
+                query = parse_qs(urlparse(response.json()["image_url"]).query)
+                self.assertEqual(query["b"], ["none"])
+
+    def test_battery_changes_create_new_signed_display_versions(self) -> None:
+        first = self.display("63").json()
+        repeated = self.display("63").json()
+        changed = self.display("62").json()
+        missing = self.display().json()
+        self.assertEqual(first["filename"], repeated["filename"])
+        self.assertNotEqual(first["filename"], changed["filename"])
+        self.assertNotEqual(changed["filename"], missing["filename"])
+        self.assertEqual(self.renderer.calls, 3)
 
 
 if __name__ == "__main__":

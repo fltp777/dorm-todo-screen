@@ -1,5 +1,31 @@
 # Findings & Decisions — through Stage 2B-2 verification
 
+## Battery-display Design Audit (2026-09-21)
+
+- 审计范围为只读设计与源码核对：不修改 FastAPI、renderer、Supabase、Render、Nook 或 Git 历史。
+- 客户端证据锁定到 `usetrmnl/trmnl-nook-simple-touch` 的实际 tag `v0.16.0`，Git tag object 为 `a1a102dc779c8e57d78ea9ae2b33d9b21bb315af`。后续结论必须以该 tag 的源码为准，而非当前 main 或通用 TRMNL API 文档。
+- `DisplayActivity.getBatteryPercent()` 读取 Android `ACTION_BATTERY_CHANGED` 的 `EXTRA_LEVEL` / `EXTRA_SCALE`，按 `Math.round(level * 100f / scale)` 产出整数 0–100；不可用时返回 -1。实际 API header 为大小写写作 `Percent-Charged: <整数>`（例如 57 发送 `57`），不会附 `%`，不是 0–1 小数或电压值。
+- 同一 fetch 路径还会在可用时发送 `rssi: <整数 dBm>`；v0.16.0 的 API header 集合为 `User-Agent`、`Accept`、可配置的 `ID` / `access-token`、以及可用时的 `Percent-Charged` / `rssi`。源码未读取或发送 `EXTRA_VOLTAGE`、`EXTRA_STATUS`、`EXTRA_PLUGGED` 等充电/电压状态。
+- `startFetch()` 在常规、闹钟唤醒及深度休眠后的刷新路径中启动 `ApiFetchTask`；task 每次启动都会重新读取电量和 RSSI，再构造请求 header。若 battery receiver/level/scale 不可用，电量 header 缺失而请求仍继续。
+- 当前 FastAPI 只从 `/api/display` 读取 `ID` 和 `access-token`；`Percent-Charged`、`rssi` 和其他设备状态均未读取、解析、记录或传给 `DisplayService`。现有 tests 也没有这些 header 的覆盖。
+- 当前 `NormalizedContent` 只含 `type/body/updated_at`，`content_version()` 仅哈希 `updated_at`；`DisplayService.current()` 以此 version 命中两版本 `ArtifactCache`。因此 Todo 不变时，即使 Nook 电量变化，也会复用旧 PNG 与旧 signed image URL。
+- 现有 signer 只允许 20 位小写十六进制 `v`；`for_version(v)` 在 cache miss 时只能从 Supabase 内容重新推导 version。若显示 version 改为不可逆 hash(`content_version + battery`)，必须同时把已签名的电量状态（或可逆 bucket）带入并签名，否则 cache miss 无法安全重建同一 PNG。
+- 推荐未来实现使用**精确整数百分比**而不是 5%/10% bucket：仅在 `Percent-Charged` 真的改变时重渲染，300 秒唤醒本身仍会发生，额外 PNG 排版成本很小；这可保证 `电量 63%` 不会被缓存成 60% 或 65%。缺失/非法值使用 `None` 状态并完全不绘制 footer。
+- 为保持 content provider 独立，`NormalizedContent` 不应加入电量。建议路由解析可选 header 后把 `battery_percent: int | None` 作为显示请求状态传给 `DisplayService` 和 renderer；保持 Supabase 表、RLS 与 editor 不变。
+- 推荐 `display_version = sha256(content_version + "\\0" + battery_state).hexdigest()[:20]`。签名 URL 增加经过 HMAC 覆盖的 `b=<0..100|none>`；`for_version(v, b)` 重载 Supabase 后以同一 `b` 重算 version、渲染并比较。这样既不暴露正文，又解决 cache miss 的可重建性；签名 URL 的有效期、410 stale 逻辑和两版本 cache 模型保持。
+- 右下角 footer 推荐一直预留约 56 px：正文区保持左/上 44 px 边距、底部收至约 y=700；footer 以现有 Noto Sans CJK SC Regular 18 px、右/下 44 px 边距绘制。文案：`>=20` 为 `电量 XX%`，`10–19` 为 `电量 XX% · 请充电`，`<10` 为 `电量 XX% · 充电！`；黑字白底、无图标。300 字正文仍在缩小字号/截断保护内。
+- 解析策略：只接受去除空白后的十进制整数 `0..100`；缺失、空、`57%`、浮点、非数字和越界均回退为无电量 footer，API 继续生成正文 PNG。仅记录不含 header 原值或凭据的低敏感 warning（或计数），不得导致 500/503。
+
+## Battery Display Local Implementation (2026-09-21)
+
+- 独立开发分支为 `codex/battery-display`，基线为 `origin/main@f3a6551`；上一轮仅改动 planning 文档，已保留在本轮本地差异中。
+- 实现保持 `NormalizedContent` 与 TodoProvider 只描述/读取 Supabase 用户内容。`Percent-Charged` 仅由 API 解析后传入 DisplayService 和 renderer；不读取 RSSI，不写任何设备状态回 Supabase。
+- `content_version()` 保留原有 `updated_at` 语义。新 `display_version(content, battery_percent)` 哈希 `content_version + NUL + battery_state`，其中 state 为规范 `0..100` 或 `none`。相同 Todo/电量复用 artifact；任一状态变化均新建 artifact。
+- Signed image URL 增加 `b`，canonical HMAC message 依次覆盖 `GET`、path、`v`、`b`、`exp`。cache miss 时从经验证的 URL state 重新计算 display version，拒绝版本不匹配的 stale 内容。
+- Renderer 永久预留 56 px footer 区域以避免设备偶发缺失 header 时正文跳动；使用现有 Noto Sans CJK SC 18 px、44 px 右/下安全边距和右对齐文案。
+- `ScreenArtifact` 也保存规范 battery state。虽然合法签名已把 `v` 与 `b` 绑定，DisplayService 在 cache hit 时仍二次确认 artifact state，避免直接 service 调用或未来接线错误返回 footer 不匹配的 PNG。
+- 最终本地验证为 Python compile、58/58 unittest、`git diff --check` 通过；测试覆盖合法/非法 header、三档 footer、300 字与大量换行布局、Todo/电量 version 变化、签名 `b` 篡改、cache hit/miss 与 stale 路径。Stage 1 runtime 13/13 和 Stage 2B-1 校准 generator/PNG 相对 origin/main 无差异。
+
 ## Stage 2B-2 Real-device Verification (2026-09-03)
 
 - **Stage 2B-2：COMPLETED / VERIFIED。** GitHub main 已包含实现（implementation `c4bcddc`，PR merge `fb5cb27`），真实端到端链路已在 Nook Simple Touch BNRV300 上通过。

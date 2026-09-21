@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from cache import ArtifactCache, ScreenArtifact
-from content import NormalizedContent, content_version
+from content import NormalizedContent, battery_state, display_version
 
 
 class ContentProvider(Protocol):
@@ -13,7 +13,7 @@ class ContentProvider(Protocol):
 
 
 class ContentRenderer(Protocol):
-    def render(self, content: NormalizedContent) -> bytes: ...
+    def render(self, content: NormalizedContent, battery_percent: int | None = None) -> bytes: ...
 
 
 class DisplayUnavailable(RuntimeError):
@@ -35,14 +35,18 @@ class DisplayService:
         self.renderer = renderer
         self.cache = cache
 
-    def current(self) -> ScreenArtifact:
+    def current(self, battery_percent: int | None = None) -> ScreenArtifact:
         try:
             content = self.provider.load()
-            version = content_version(content)
+            version = display_version(content, battery_percent)
             cached = self.cache.get(version)
             if cached is not None:
                 return cached
-            artifact = ScreenArtifact(version=version, png=self.renderer.render(content))
+            artifact = ScreenArtifact(
+                version=version,
+                png=self.renderer.render(content, battery_percent),
+                battery_state=battery_state(battery_percent),
+            )
             self.cache.put(artifact)
             return artifact
         except Exception:
@@ -51,9 +55,9 @@ class DisplayService:
                 return latest
             raise DisplayUnavailable("No screen artifact is currently available") from None
 
-    def for_version(self, version: str) -> ScreenArtifact:
+    def for_version(self, version: str, battery_percent: int | None) -> ScreenArtifact:
         cached = self.cache.get(version)
-        if cached is not None:
+        if cached is not None and cached.battery_state == battery_state(battery_percent):
             return cached
 
         try:
@@ -61,11 +65,15 @@ class DisplayService:
         except Exception:
             raise DisplayUnavailable("Screen content could not be loaded") from None
 
-        if content_version(content) != version:
+        if display_version(content, battery_percent) != version:
             raise StaleContentVersion("The requested screen version is no longer current")
 
         try:
-            artifact = ScreenArtifact(version=version, png=self.renderer.render(content))
+            artifact = ScreenArtifact(
+                version=version,
+                png=self.renderer.render(content, battery_percent),
+                battery_state=battery_state(battery_percent),
+            )
         except Exception:
             raise DisplayUnavailable("Screen content could not be rendered") from None
         self.cache.put(artifact)

@@ -2,6 +2,8 @@
 
 Status: **COMPLETED / VERIFIED**. Stage 2B-1 remains device-verified, and the Stage 2B-2 dynamic Supabase path has now passed real end-to-end testing on a Nook Simple Touch BNRV300.
 
+Battery display addition: **LOCAL IMPLEMENTATION ONLY**. It has automated local coverage but has not been deployed to Render or device-verified.
+
 ```text
 screen_state.main
   → TodoProvider
@@ -33,6 +35,8 @@ The existing GitHub Pages frontend, Supabase Auth/RLS, and Stage 2B-1 calibratio
 - A new `sb_secret_...` Supabase server key is sent only in the REST `apikey` header. It is not a JWT and is never sent as a Bearer token.
 - The server key and signing secret must exist only as secret Render environment variables. They never appear in URLs, responses, logs, frontend files, or Nook settings.
 - The Nook client does not forward API auth headers when fetching `image_url`. Dynamic images therefore use a short-lived HMAC-SHA256 capability URL.
+- `Percent-Charged` is accepted only as an optional canonical integer from 0 to 100. It is request-only device state: never written to Supabase, returned as content, or logged with its raw value.
+- The signed capability URL carries a non-sensitive `b` state (`0..100` or `none`) so a cache miss can rebuild the exact battery footer version. `b` is included in the HMAC input.
 - `/screen/test.png` remains public only as a non-private Stage 2B-1 diagnostic artifact.
 
 Canonical image signature input:
@@ -41,6 +45,7 @@ Canonical image signature input:
 GET
 /screen/current.png
 v=<20-char version>
+b=<0..100|none>
 exp=<unix-seconds>
 ```
 
@@ -85,12 +90,12 @@ Do not use a real Supabase key for automated tests. Tests inject fake providers 
 |---|---|---|
 | `GET /health` | none | Process health only |
 | `GET /api/display` | `ID` + `access-token` | Refresh content and return signed dynamic `image_url` |
-| `GET /screen/current.png?v=...&exp=...&sig=...` | short-lived HMAC URL | Return the requested cached/current todo PNG |
+| `GET /screen/current.png?v=...&b=...&exp=...&sig=...` | short-lived HMAC URL | Return the requested cached/current todo PNG |
 | `GET /screen/test.png` | none | Retained Stage 2B-1 orientation diagnostic |
 
 `/api/display` never returns the todo body. A provider or renderer failure returns the most recent successful artifact when available; a cold process with no successful artifact returns 503. Empty todo text is valid and renders `暂无内容` as a new version.
 
-The process-local cache holds at most two successful versions. On a cache miss, the image endpoint reloads Supabase and rebuilds only when the current version matches the signed `v`; stale URLs return 410.
+The process-local cache holds at most two successful versions. On a cache miss, the image endpoint reloads Supabase and rebuilds only when the current display version matches the signed `v` and `b`; stale URLs return 410.
 
 ## Renderer
 
@@ -99,6 +104,7 @@ The process-local cache holds at most two successful versions. On a cache miss, 
 - Pathological excessive line breaks are safely truncated at the minimum size with an ellipsis.
 - Output is Pillow mode `1`, white background and black text.
 - It first composes upright 600×800, then applies `Image.Transpose.ROTATE_90` to produce the verified 800×600 source PNG.
+- It always reserves a 56 px footer band. With a valid request battery value, Noto Sans CJK SC Regular 18 px text is right-aligned with the existing 44 px safe margins: `>=20` uses `电量 XX%`, `10–19` adds `· 请充电`, and `0–9` adds `· 充电！`. Missing/invalid battery values render no footer.
 
 The bundled font is `assets/fonts/NotoSansCJKsc-Regular.otf`, downloaded from the official [`notofonts/noto-cjk`](https://github.com/notofonts/noto-cjk/tree/main/Sans/OTF/SimplifiedChinese) repository. It is distributed under the SIL Open Font License 1.1; the exact license text is included at `assets/fonts/LICENSE`. No system font discovery is used.
 

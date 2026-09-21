@@ -1,5 +1,24 @@
 # Progress Log
 
+## Session: 2026-09-21 — Nook 电量显示本地实现
+
+- 从最新 `origin/main@f3a6551` 建立独立 `codex/battery-display` 分支，并保留上一轮三份未提交电量审计记录。
+- `/api/display` 现严格解析可选 `Percent-Charged`；合法 ASCII 十进制 0–100 进入 display request state，缺失或非法值为 `None`，仅记录不含原值的 warning，正文请求仍可用。
+- `NormalizedContent`、TodoProvider、Supabase 表/RLS 与 Stage 1 网页保持不变。content version 仍只来自 `updated_at`；artifact version 额外包含规范 battery state `0..100|none`。
+- 签名 URL 由 `v`、`b`、`exp`、`sig` 组成，HMAC canonical message 覆盖 `b`；cache miss 使用已验证的 `b` 重算版本，Todo 已更新时维持 410 stale，provider 失败且无 cache 时维持 503。
+- Renderer 始终预留 56 px footer 区，使用现有 Noto Sans CJK SC 18 px 与 44 px 安全边距；方向仍是 600×800 portrait 后 `ROTATE_90` 输出 800×600。
+- 最终 compile、58/58 unittest 与 `git diff --check` 通过；Stage 1 runtime 13/13 与 origin/main 无差异，Stage 2B-1 固定校准图/generator 无差异。未部署、未 commit、未 push。
+- 凭据复核未发现已跟踪 `.env`、GitHub token 或私钥；`sb_secret_` 仅出现于现有 server-only 配置前缀校验，未记录真实值。
+
+## Session: 2026-09-21 — 电量显示功能设计审计
+
+- 只读确认 `usetrmnl/trmnl-nook-simple-touch@v0.16.0`（tag `a1a102d…`）实际在每次 `ApiFetchTask` 时读取 Android battery level/scale，发送条件性 `Percent-Charged: <0..100 integer>` 与 `rssi: <dBm integer>`；无电压或充电状态 header。
+- 常规与深度休眠/闹钟唤醒路径都会进入同一 fetch task。未知 battery 时 header 缺失但请求继续。
+- 当前 FastAPI 仅读取 `ID`/`access-token`，没有读取任何 device-state header；现有 content version 只基于 `updated_at`，所以电量变动会复用旧 PNG。
+- 设计建议：电量保持 request-only 状态，精确整数纳入 display version；在 HMAC 签名 URL 中加入已签名的非敏感 `b` state，支持 cache miss 的一致重建。缺失/非法值只隐藏 footer，不影响正文。
+- 推荐 footer：600×800 portrait 右下、Noto Sans CJK SC 18 px、44 px 右/下边距，正文永久预留约 56 px 底部区域；20/10 两个低电量阈值按用户要求显示提醒文本。
+- 未修改业务代码、测试、Render、Supabase、Nook、Git 提交或远端。GitHub 网页源码直读遇到缓存 miss 后，已改用精确 tag 的临时只读 clone 完成核对。
+
 ## Session: 2026-09-03 — Stage 2B-2 实机验收 checkpoint
 
 - **Stage 2B-1：COMPLETED / VERIFIED；Stage 2B-2：COMPLETED / VERIFIED。**

@@ -7,7 +7,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from cache import ArtifactCache, ScreenArtifact
-from content import NormalizedContent, content_version
+from content import NormalizedContent, content_version, display_version
 from display_service import DisplayService, DisplayUnavailable, StaleContentVersion
 from security.signed_url import SignedImageURL
 
@@ -34,11 +34,11 @@ class CountingRenderer:
         self.calls = 0
         self.fail = False
 
-    def render(self, content: NormalizedContent) -> bytes:
+    def render(self, content: NormalizedContent, battery_percent: int | None = None) -> bytes:
         self.calls += 1
         if self.fail:
             raise RuntimeError("renderer failed")
-        return f"png:{content.body}".encode()
+        return f"png:{content.body}:{battery_percent}".encode()
 
 
 class SignedImageURLTests(unittest.TestCase):
@@ -47,35 +47,38 @@ class SignedImageURLTests(unittest.TestCase):
         self.signer = SignedImageURL("test-signing-secret-value-that-is-long", 900, clock=lambda: self.now)
         self.version = "0123456789abcdefabcd"
 
-    def query(self) -> dict[str, str]:
-        parsed = parse_qs(urlparse(self.signer.signed_path(self.version)).query)
+    def query(self, battery: str = "63") -> dict[str, str]:
+        parsed = parse_qs(urlparse(self.signer.signed_path(self.version, battery)).query)
         return {key: values[0] for key, values in parsed.items()}
 
     def test_canonical_format_and_valid_signature(self) -> None:
         query = self.query()
         self.assertEqual(
-            self.signer.canonical_message(self.version, 1900),
-            b"GET\n/screen/current.png\nv=0123456789abcdefabcd\nexp=1900",
+            self.signer.canonical_message(self.version, "63", 1900),
+            b"GET\n/screen/current.png\nv=0123456789abcdefabcd\nb=63\nexp=1900",
         )
-        self.assertTrue(self.signer.verify(query["v"], query["exp"], query["sig"]))
+        self.assertTrue(self.signer.verify(query["v"], query["b"], query["exp"], query["sig"]))
 
     def test_rejects_signature_expiry_and_version_tampering(self) -> None:
         query = self.query()
-        self.assertFalse(self.signer.verify(query["v"], query["exp"], "wrong"))
-        self.assertFalse(self.signer.verify(query["v"], "1901", query["sig"]))
-        self.assertFalse(self.signer.verify("f" * 20, query["exp"], query["sig"]))
+        self.assertFalse(self.signer.verify(query["v"], query["b"], query["exp"], "wrong"))
+        self.assertFalse(self.signer.verify(query["v"], "62", query["exp"], query["sig"]))
+        self.assertFalse(self.signer.verify(query["v"], query["b"], "1901", query["sig"]))
+        self.assertFalse(self.signer.verify("f" * 20, query["b"], query["exp"], query["sig"]))
 
     def test_rejects_missing_invalid_and_expired_fields(self) -> None:
         query = self.query()
-        self.assertFalse(self.signer.verify(None, query["exp"], query["sig"]))
-        self.assertFalse(self.signer.verify(query["v"], "invalid", query["sig"]))
+        self.assertFalse(self.signer.verify(None, query["b"], query["exp"], query["sig"]))
+        self.assertFalse(self.signer.verify(query["v"], None, query["exp"], query["sig"]))
+        self.assertFalse(self.signer.verify(query["v"], "101", query["exp"], query["sig"]))
+        self.assertFalse(self.signer.verify(query["v"], query["b"], "invalid", query["sig"]))
         self.now = 1901
-        self.assertFalse(self.signer.verify(query["v"], query["exp"], query["sig"]))
+        self.assertFalse(self.signer.verify(query["v"], query["b"], query["exp"], query["sig"]))
 
     def test_verification_uses_compare_digest(self) -> None:
         query = self.query()
         with patch("security.signed_url.hmac.compare_digest", wraps=hmac.compare_digest) as compared:
-            self.assertTrue(self.signer.verify(query["v"], query["exp"], query["sig"]))
+            self.assertTrue(self.signer.verify(query["v"], query["b"], query["exp"], query["sig"]))
             compared.assert_called_once()
 
 
@@ -101,8 +104,8 @@ class DisplayServiceTests(unittest.TestCase):
         self.service = DisplayService(self.provider, self.renderer, self.cache)
 
     def test_same_version_does_not_render_twice(self) -> None:
-        first = self.service.current()
-        second = self.service.current()
+        first = self.service.current(63)
+        second = self.service.current(63)
         self.assertEqual(first, second)
         self.assertEqual(self.renderer.calls, 1)
 
@@ -110,40 +113,55 @@ class DisplayServiceTests(unittest.TestCase):
         versions = []
         for second in (1, 2, 3):
             self.provider.content = item(second, str(second))
-            versions.append(self.service.current().version)
+            versions.append(self.service.current(63).version)
         self.assertEqual(self.renderer.calls, 3)
         self.assertEqual(len(self.cache), 2)
         self.assertIsNone(self.cache.get(versions[0]))
 
     def test_provider_failure_returns_latest_cache(self) -> None:
-        expected = self.service.current()
+        expected = self.service.current(63)
         self.provider.fail = True
-        self.assertEqual(self.service.current(), expected)
+        self.assertEqual(self.service.current(62), expected)
 
     def test_provider_failure_without_cache_is_unavailable(self) -> None:
         self.provider.fail = True
         with self.assertRaises(DisplayUnavailable):
-            self.service.current()
+            self.service.current(63)
 
     def test_renderer_failure_returns_latest_cache(self) -> None:
-        expected = self.service.current()
+        expected = self.service.current(63)
         self.provider.content = item(2, "new")
         self.renderer.fail = True
-        self.assertEqual(self.service.current(), expected)
+        self.assertEqual(self.service.current(63), expected)
 
     def test_empty_text_is_rendered_as_new_content(self) -> None:
-        old = self.service.current()
+        old = self.service.current(63)
         self.provider.content = item(2, "")
-        new = self.service.current()
+        new = self.service.current(63)
         self.assertNotEqual(old.version, new.version)
-        self.assertEqual(new.png, b"png:")
+        self.assertEqual(new.png, b"png::63")
 
     def test_cache_miss_rebuilds_only_matching_current_version(self) -> None:
-        expected_version = content_version(self.provider.content)
-        artifact = self.service.for_version(expected_version)
+        expected_version = display_version(self.provider.content, 63)
+        artifact = self.service.for_version(expected_version, 63)
         self.assertEqual(artifact.version, expected_version)
         with self.assertRaises(StaleContentVersion):
-            self.service.for_version("f" * 20)
+            self.service.for_version("f" * 20, 63)
+
+    def test_battery_changes_create_new_artifacts_without_content_change(self) -> None:
+        first = self.service.current(63)
+        second = self.service.current(62)
+        none = self.service.current(None)
+        self.assertNotEqual(first.version, second.version)
+        self.assertNotEqual(second.version, none.version)
+        self.assertEqual(self.renderer.calls, 3)
+
+    def test_cache_miss_rebuild_requires_matching_battery_state(self) -> None:
+        version = display_version(self.provider.content, 63)
+        rebuilt = self.service.for_version(version, 63)
+        self.assertEqual(rebuilt.version, version)
+        with self.assertRaises(StaleContentVersion):
+            self.service.for_version(version, 62)
 
 
 if __name__ == "__main__":

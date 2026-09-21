@@ -11,6 +11,7 @@ from threading import Lock
 class ScreenArtifact:
     version: str
     png: bytes
+    battery_state: str = "none"
 
 
 class ArtifactCache:
