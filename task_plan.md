@@ -1,5 +1,47 @@
 # Task Plan: Stage 2B-2 实机验收 checkpoint
 
+## 电量显示功能设计审计（2026-09-21）
+
+**Goal:** 只读核对 TRMNL Nook Client v0.16.0 的实际电池请求 header、当前 FastAPI 与动态 PNG 的版本/缓存边界，并给出最小电量显示方案；不修改业务代码、配置、Supabase、Nook 或部署，不提交。
+
+- [x] 恢复工作树并确认当前 checkpoint 分支干净
+- [x] 从 v0.16.0 实际源码确认 `/api/display` 请求 header、数据格式与深度休眠路径
+- [x] 核对 FastAPI routes/service/content/cache/renderer/tests 是否已读取设备状态
+- [x] 审计 content version、artifact cache、signed URL 与电量刷新耦合
+- [x] 制定最小视觉、缺失值、文件改动及测试方案
+- [x] 记录审计结论；保持业务代码与 Git 历史不变
+
+**Status:** complete — read-only design audit; no implementation started.
+
+## Nook 电量显示本地实现（2026-09-21）
+
+**Goal:** 在 `origin/main@f3a6551` 的独立 `codex/battery-display` 分支实现 Nook request-only 电量 footer、精确电量 display version 与已签名 `b` URL 参数；仅本地代码、测试和文档，不部署、提交或 push。
+
+- [x] fetch 最新 origin/main，保留三份未提交设计审计记录并建立独立分支
+- [x] 实现严格 `Percent-Charged` parser 与 API → DisplayService request state
+- [x] 实现 content/display version 分层、已签名 battery state 和 cache-miss 重建
+- [x] 实现不重叠的中文右下 footer 与低电量文案
+- [x] 增加 parser、renderer、cache/version、signed URL、API 与回归测试（首轮全量 58/58）
+- [x] compile、unittest、diff check、secret scan、Stage 1/2B 回归；更新文档（58/58 passing）
+
+**Status:** complete — LOCAL IMPLEMENTATION ONLY; 58/58 tests and regressions pass; no deploy, commit or push.
+
+## Nook 电量显示提交与 PR（2026-09-21）
+
+- [x] fetch origin；确认 `origin/main@f3a6551` 未在本地开发期间前进
+- [x] 确认 `codex/battery-display` 直接基于当前正式 main，不需 rebase/merge
+- [x] 复跑完整验收、diff 与凭据扫描（compile + 58/58、diff、Stage 1/2B 回归通过）
+- [x] 创建 `feat: add Nook battery status to todo screen` commit（本次 checkpoint 即将创建）
+- [ ] push `codex/battery-display`，只准备 PR 到 main，不 merge
+
+**Status:** in_progress — LOCAL IMPLEMENTATION ONLY; no deploy or main push.
+
+**Note:** 一次 `git diff -G` 私钥模式因 Windows `cmd` 将含空格正则拆分而失败；已改用无空格 token/secret/signed-URL 模式与文件范围复核，未产生文件改动。
+
+**Note:** 一次 Windows `cmd` 全局检索将 `|` 解释为管道，未读取到目标集合；已改为 compile/test 的定点验证方式，未改动任何文件。
+
+**Test note:** 首轮测试发现当前 worktree 缺少 FastAPI/httpx 虚拟环境；同时新增 direct-service 测试暴露 cache-hit 未显式校验 battery state，以及测试 fake renderer 期望值过时。前者已将 `battery_state` 固化到 artifact 并在 cache hit 校验，后者已更新；随后将用现有项目 venv 重跑全量测试。
+
 ## Stage 2B-2 Verified Checkpoint (2026-09-03)
 
 - [x] fetch 并确认最新 `origin/main@fb5cb277e6d05b8b16a9b860929024ffc29db9ce`

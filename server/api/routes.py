@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import re
 import secrets
 from pathlib import Path
 
@@ -9,11 +11,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 
 from config import Settings, normalize_device_id
+from content import battery_percent_from_state, battery_state
 from display_service import DisplayService, DisplayUnavailable, StaleContentVersion
 from security.signed_url import SignedImageURL
 
 router = APIRouter()
 TEST_IMAGE_PATH = Path(__file__).resolve().parent.parent / "static" / "test-screen.png"
+logger = logging.getLogger(__name__)
+_BATTERY_PERCENT_PATTERN = re.compile(r"^[0-9]+$")
 
 
 def _get_settings(request: Request) -> Settings:
@@ -27,6 +32,21 @@ def _get_display_service(request: Request) -> DisplayService:
 
 def _get_image_signer(request: Request) -> SignedImageURL:
     return request.app.state.image_signer
+
+
+def parse_battery_percent(value: str | None) -> int | None:
+    """Parse the Nook's optional Percent-Charged header without exposing its value."""
+    if value is None:
+        return None
+    candidate = value.strip()
+    if not candidate or not _BATTERY_PERCENT_PATTERN.fullmatch(candidate):
+        logger.warning("Ignoring invalid Percent-Charged header")
+        return None
+    parsed = int(candidate)
+    if not 0 <= parsed <= 100:
+        logger.warning("Ignoring invalid Percent-Charged header")
+        return None
+    return parsed
 
 
 def _require_device(
@@ -63,6 +83,7 @@ def health() -> dict[str, str]:
 def display(
     request: Request,
     settings: Settings = Depends(_require_device),
+    percent_charged: str | None = Header(default=None, alias="Percent-Charged"),
 ) -> dict[str, object]:
     # The Nook app normalizes its configured base URL to /api, then appends /display.
     if not settings.content_is_configured:
@@ -72,8 +93,12 @@ def display(
         )
 
     try:
-        artifact = _get_display_service(request).current()
-        signed_path = _get_image_signer(request).signed_path(artifact.version)
+        battery_percent = parse_battery_percent(percent_charged)
+        artifact = _get_display_service(request).current(battery_percent)
+        signed_path = _get_image_signer(request).signed_path(
+            artifact.version,
+            battery_state(battery_percent),
+        )
     except (DisplayUnavailable, ValueError):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -93,18 +118,22 @@ def display(
 def current_screen(
     request: Request,
     v: str | None = None,
+    b: str | None = None,
     exp: str | None = None,
     sig: str | None = None,
 ) -> Response:
     signer = _get_image_signer(request)
-    if not signer.verify(v, exp, sig):
+    if not signer.verify(v, b, exp, sig):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid or expired image URL",
         )
 
     try:
-        artifact = _get_display_service(request).for_version(v or "")
+        artifact = _get_display_service(request).for_version(
+            v or "",
+            battery_percent_from_state(b or ""),
+        )
     except StaleContentVersion:
         raise HTTPException(
             status_code=status.HTTP_410_GONE,

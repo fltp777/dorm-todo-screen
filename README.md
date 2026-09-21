@@ -31,7 +31,7 @@
 - 使用随项目分发的 Noto Sans CJK SC Regular，将 300 字以内正文排成严格黑白 600×800 portrait，再逆时针预旋转为 800×600 PNG。
 - 使用 `updated_at` 派生内容版本；相同版本复用最多两个 artifact 的进程内缓存。
 - `/api/display` 继续校验 `ID` + `access-token`，只返回约 900 秒有效的 HMAC-SHA256 签名图片 URL，不返回正文或 server secret。
-- `/screen/current.png` 无需 Nook 额外 header，但必须通过 `v`、`exp`、`sig` 验证；Stage 2B-1 `/screen/test.png` 继续保留。
+- `/screen/current.png` 无需 Nook 额外 header，但必须通过 `v`、`b`、`exp`、`sig` 验证；Stage 2B-1 `/screen/test.png` 继续保留。
 
 - Render 构建及 FastAPI 启动成功，公网 `/health`、设备认证 `/api/display` 与动态 signed image URL 均正常。
 - Render 从真实 Supabase `screen_state.main` 读取手机网页保存的内容，而不是 mock、test fixture 或固定 TEST 01 校准图。
@@ -39,6 +39,15 @@
 - 中文字体、中文/英文及用户手动换行显示正常。
 - 服务端继续输出已经 Stage 2B-1 实机确认的 800×600 预旋转图；不因照片或设备摆放方向修改 renderer 旋转逻辑。
 - 已验证网络仍为手机热点；校园网 PEAP 留作后续独立任务。
+
+## Nook 电量显示（本地实现）
+
+**Battery display = LOCAL IMPLEMENTATION ONLY。** 尚未部署到 Render 或在 Nook 上实机验证。
+
+- TRMNL Nook Client v0.16.0 在可读取时发送 `Percent-Charged: 0..100`；服务端只接受规范十进制整数，缺失或非法值不会影响待办显示。
+- 有效电量以右下角 Noto Sans CJK SC 小字显示：`电量 XX%`、`电量 XX% · 请充电` 或 `电量 XX% · 充电！`；电量缺失时不显示 footer，但仍预留底部区域以保持正文稳定。
+- 电量只存在于本次 Nook 请求与生成图片中，不写入 Supabase、不进入 editor，也不改变 `screen_state`、RLS 或 SQL。
+- 图片 artifact version 同时由 Todo 的 `updated_at` 内容版本和 `0..100`/`none` 电量状态派生；签名 URL 的 `b` 参数受 HMAC 保护，允许 cache miss 时安全重建相同 PNG。
 
 ## 当前硬件与 Stage 2B-2 架构
 
@@ -63,7 +72,7 @@ Nook v0.16.0
         ↓  ID + access-token
 BYOS GET /api/display
         ↓  signed image_url
-GET /screen/current.png?v=...&exp=...&sig=...
+GET /screen/current.png?v=...&b=...&exp=...&sig=...
         ↓  客户端顺时针旋转
 预期 600x800 竖屏显示
 ```

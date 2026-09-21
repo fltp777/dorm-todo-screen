@@ -17,6 +17,8 @@ MARGIN = 44
 MAX_FONT_SIZE = 52
 MIN_FONT_SIZE = 20
 FONT_STEP = 2
+FOOTER_FONT_SIZE = 18
+FOOTER_RESERVED_HEIGHT = 56
 DEFAULT_FONT_PATH = (
     Path(__file__).resolve().parent.parent / "assets" / "fonts" / "NotoSansCJKsc-Regular.otf"
 )
@@ -35,6 +37,15 @@ class TextLayout:
     truncated: bool
 
 
+@dataclass(frozen=True)
+class FooterLayout:
+    text: str
+    x: int
+    y: int
+    width: int
+    height: int
+
+
 class TodoRenderer:
     def __init__(self, font_path: Path = DEFAULT_FONT_PATH) -> None:
         self.font_path = Path(font_path)
@@ -45,7 +56,9 @@ class TodoRenderer:
 
     @property
     def max_text_height(self) -> int:
-        return PORTRAIT_HEIGHT - (MARGIN * 2)
+        # Always reserve the footer band so content does not jump when the optional
+        # device header is temporarily unavailable.
+        return PORTRAIT_HEIGHT - (MARGIN * 2) - FOOTER_RESERVED_HEIGHT
 
     def _font(self, size: int) -> ImageFont.FreeTypeFont:
         if not self.font_path.is_file():
@@ -132,7 +145,42 @@ class TodoRenderer:
             True,
         )
 
-    def render_portrait(self, content: NormalizedContent) -> Image.Image:
+    @staticmethod
+    def battery_footer_text(battery_percent: int | None) -> str | None:
+        if battery_percent is None:
+            return None
+        if not 0 <= battery_percent <= 100:
+            raise ValueError("Battery percentage must be between 0 and 100")
+        if battery_percent >= 20:
+            return f"电量 {battery_percent}%"
+        if battery_percent >= 10:
+            return f"电量 {battery_percent}% · 请充电"
+        return f"电量 {battery_percent}% · 充电！"
+
+    def footer_layout(self, battery_percent: int | None) -> FooterLayout | None:
+        text = self.battery_footer_text(battery_percent)
+        if text is None:
+            return None
+        font = self._font(FOOTER_FONT_SIZE)
+        scratch = Image.new("1", (PORTRAIT_WIDTH, PORTRAIT_HEIGHT), color=1)
+        box = ImageDraw.Draw(scratch).textbbox((0, 0), text, font=font)
+        width = box[2] - box[0]
+        height = box[3] - box[1]
+        return FooterLayout(
+            text=text,
+            # Position by the measured glyph bounds, not only their dimensions,
+            # because CJK font bounds can have non-zero top offsets.
+            x=PORTRAIT_WIDTH - MARGIN - box[2],
+            y=PORTRAIT_HEIGHT - MARGIN - box[3],
+            width=width,
+            height=height,
+        )
+
+    def render_portrait(
+        self,
+        content: NormalizedContent,
+        battery_percent: int | None = None,
+    ) -> Image.Image:
         portrait = Image.new("1", (PORTRAIT_WIDTH, PORTRAIT_HEIGHT), color=1)
         draw = ImageDraw.Draw(portrait)
         body = content.body if content.body != "" else "暂无内容"
@@ -143,15 +191,27 @@ class TodoRenderer:
         for line in layout.lines:
             draw.text((MARGIN, y), line, fill=0, font=font, anchor="lt")
             y += layout.line_step
+        footer = self.footer_layout(battery_percent)
+        if footer is not None:
+            draw.text(
+                (footer.x, footer.y),
+                footer.text,
+                fill=0,
+                font=self._font(FOOTER_FONT_SIZE),
+            )
         return portrait
 
-    def render_image(self, content: NormalizedContent) -> Image.Image:
+    def render_image(
+        self,
+        content: NormalizedContent,
+        battery_percent: int | None = None,
+    ) -> Image.Image:
         # v0.16.0 rotates exact 800x600 images clockwise on the Nook.
-        return self.render_portrait(content).transpose(Image.Transpose.ROTATE_90)
+        return self.render_portrait(content, battery_percent).transpose(Image.Transpose.ROTATE_90)
 
-    def render(self, content: NormalizedContent) -> bytes:
+    def render(self, content: NormalizedContent, battery_percent: int | None = None) -> bytes:
         try:
-            image = self.render_image(content)
+            image = self.render_image(content, battery_percent)
             output = io.BytesIO()
             image.save(output, format="PNG", optimize=True)
             return output.getvalue()

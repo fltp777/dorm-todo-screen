@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from PIL import Image, ImageDraw
 
 from content import NormalizedContent
-from renderer.todo import OUTPUT_SIZE, TodoRenderer
+from renderer.todo import FOOTER_RESERVED_HEIGHT, MARGIN, OUTPUT_SIZE, TodoRenderer
 
 
 def content(body: str) -> NormalizedContent:
@@ -50,6 +50,32 @@ class TodoRendererTests(unittest.TestCase):
         self.assertFalse(layout.truncated)
         self.assert_layout_safe(body)
 
+    def test_footer_text_uses_exact_low_battery_thresholds(self) -> None:
+        self.assertEqual(self.renderer.battery_footer_text(63), "电量 63%")
+        self.assertEqual(self.renderer.battery_footer_text(20), "电量 20%")
+        self.assertEqual(self.renderer.battery_footer_text(19), "电量 19% · 请充电")
+        self.assertEqual(self.renderer.battery_footer_text(10), "电量 10% · 请充电")
+        self.assertEqual(self.renderer.battery_footer_text(9), "电量 9% · 充电！")
+        self.assertEqual(self.renderer.battery_footer_text(0), "电量 0% · 充电！")
+        self.assertIsNone(self.renderer.battery_footer_text(None))
+
+    def test_footer_is_right_aligned_and_separate_from_body_area(self) -> None:
+        footer = self.renderer.footer_layout(19)
+        self.assertIsNotNone(footer)
+        assert footer is not None
+        self.assertGreaterEqual(footer.x, MARGIN)
+        self.assertLessEqual(footer.x + footer.width, 600 - MARGIN)
+        self.assertGreaterEqual(footer.y, MARGIN + self.renderer.max_text_height)
+        self.assertLessEqual(footer.y + footer.height, 800 - MARGIN)
+        self.assertEqual(self.renderer.max_text_height, 800 - (MARGIN * 2) - FOOTER_RESERVED_HEIGHT)
+
+    def test_300_characters_and_manual_lines_fit_above_reserved_footer(self) -> None:
+        for body in ("待" * 300, "\n".join("行" for _ in range(160))):
+            with self.subTest(body_length=len(body)):
+                layout = self.renderer.layout_text(body)
+                self.assertLessEqual(layout.text_height, self.renderer.max_text_height)
+                self.assertIsNotNone(self.renderer.footer_layout(63))
+
     def test_many_manual_lines_are_safely_truncated(self) -> None:
         body = "\n".join("行" for _ in range(160))
         layout = self.renderer.layout_text(body)
@@ -64,7 +90,7 @@ class TodoRendererTests(unittest.TestCase):
         self.assertEqual({value for _, value in colors or []}, {0, 1})
 
     def test_output_is_strict_black_white_png_800_by_600(self) -> None:
-        png = self.renderer.render(content("明天下午组会\n修改 PPT\n查两篇文献"))
+        png = self.renderer.render(content("明天下午组会\n修改 PPT\n查两篇文献"), 63)
         image = Image.open(io.BytesIO(png))
         self.assertEqual(image.format, "PNG")
         self.assertEqual(image.mode, "1")
@@ -75,8 +101,8 @@ class TodoRendererTests(unittest.TestCase):
 
     def test_output_is_counterclockwise_prerotation_of_portrait(self) -> None:
         item = content("TOP\n测试")
-        portrait = self.renderer.render_portrait(item)
-        output = self.renderer.render_image(item)
+        portrait = self.renderer.render_portrait(item, 63)
+        output = self.renderer.render_image(item, 63)
         expected = portrait.transpose(Image.Transpose.ROTATE_90)
         self.assertEqual(portrait.size, (600, 800))
         self.assertEqual(output.size, (800, 600))
