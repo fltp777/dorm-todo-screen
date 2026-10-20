@@ -1,13 +1,18 @@
-# Stage 2B-2 dynamic todo BYOS server
+# Stage 2B-2 dynamic BYOS server
 
 Status: **COMPLETED / VERIFIED**. Stage 2B-1 remains device-verified, and the Stage 2B-2 dynamic Supabase path has now passed real end-to-end testing on a Nook Simple Touch BNRV300.
 
 Battery display addition: **LOCAL IMPLEMENTATION ONLY**. It has automated local coverage but has not been deployed to Render or device-verified.
 
+Stage 2C flow information screen wiring: **LOCAL IMPLEMENTATION ONLY**. The
+user has manually executed and verified the Supabase schema migration; the
+renderer/editor/server code itself has not been deployed to Render or refreshed
+on the Nook.
+
 ```text
 screen_state.main
   → TodoProvider
-  → NormalizedContent(type, body, updated_at)
+  → NormalizedContent(todo, reminders, Yijing position, updated_at)
   → 600x800 black/white portrait
   → counterclockwise pre-rotation
   → cached 800x600 PNG
@@ -31,12 +36,12 @@ The existing GitHub Pages frontend, Supabase Auth/RLS, and Stage 2B-1 calibratio
 ## Security model
 
 - The Nook continues to authenticate `GET /api/display` with `ID` and `access-token`.
-- The server reads only `screen_state?id=eq.main&select=text,updated_at`.
+- The server reads only `screen_state?id=eq.main&select=text,daily_reminder_text,yijing_position,updated_at`.
 - A new `sb_secret_...` Supabase server key is sent only in the REST `apikey` header. It is not a JWT and is never sent as a Bearer token.
 - The server key and signing secret must exist only as secret Render environment variables. They never appear in URLs, responses, logs, frontend files, or Nook settings.
 - The Nook client does not forward API auth headers when fetching `image_url`. Dynamic images therefore use a short-lived HMAC-SHA256 capability URL.
 - `Percent-Charged` is accepted only as an optional canonical integer from 0 to 100. It is request-only device state: never written to Supabase, returned as content, or logged with its raw value.
-- The signed capability URL carries a non-sensitive `b` state (`0..100` or `none`) so a cache miss can rebuild the exact battery footer version. `b` is included in the HMAC input.
+- The signed capability URL carries non-sensitive `b` (`0..100` or `none`) and `r` (UTC request minute) states. They rebuild the exact battery and `更新 HH:MM` footer after a cache miss; both are HMAC-protected.
 - `/screen/test.png` remains public only as a non-private Stage 2B-1 diagnostic artifact.
 
 Canonical image signature input:
@@ -46,6 +51,7 @@ GET
 /screen/current.png
 v=<20-char version>
 b=<0..100|none>
+r=<UTC-minute|none>
 exp=<unix-seconds>
 ```
 
@@ -90,21 +96,24 @@ Do not use a real Supabase key for automated tests. Tests inject fake providers 
 |---|---|---|
 | `GET /health` | none | Process health only |
 | `GET /api/display` | `ID` + `access-token` | Refresh content and return signed dynamic `image_url` |
-| `GET /screen/current.png?v=...&b=...&exp=...&sig=...` | short-lived HMAC URL | Return the requested cached/current todo PNG |
+| `GET /screen/current.png?v=...&b=...&r=...&exp=...&sig=...` | short-lived HMAC URL | Return the requested cached/current todo PNG |
 | `GET /screen/test.png` | none | Retained Stage 2B-1 orientation diagnostic |
 
-`/api/display` never returns the todo body. A provider or renderer failure returns the most recent successful artifact when available; a cold process with no successful artifact returns 503. Empty todo text is valid and renders `暂无内容` as a new version.
+`/api/display` never returns content text. A provider or renderer failure returns the most recent successful artifact when available; a cold process with no successful artifact returns 503.
 
-The process-local cache holds at most two successful versions. On a cache miss, the image endpoint reloads Supabase and rebuilds only when the current display version matches the signed `v` and `b`; stale URLs return 410.
+The process-local cache holds at most two successful versions. A render version includes content `updated_at`, request battery state, and the successful `/api/display` response minute. On a cache miss, the image endpoint rebuilds only when signed `v`, `b`, and `r` still match; stale URLs return 410.
 
-## Renderer
+## Stage 2C flow renderer
 
-- The renderer preserves manual newlines and wraps Chinese, English, digits, and unbroken strings by measured pixel width.
-- It tries even font sizes from 52 px down to 20 px and uses the largest layout that fits inside 44 px margins.
-- Pathological excessive line breaks are safely truncated at the minimum size with an ellipsis.
+- The upright production layout uses `renderer/flow_layout.py`: x=392 and footer y=746 remain fixed, but there is no production `y=373` horizontal split. The left column flows as todo title → todo → 1 px divider → Yijing header → Yijing paragraphs.
+- The entire left column uses one shared `left_font_size` candidate (40→22 px, 2 px steps): todo title, todo body, Yijing heading, trigram/name/line heading, and every Yijing paragraph all use that size. Only bold weight distinguishes headings. The right reminder column remains independently 50→24 px.
+- The divider is calculated after the final todo line, with 10 px before/after gaps. If every left size reaches its minimum, the final visible line is ellipsized and a low-sensitivity warning is emitted; no content crosses a divider or footer.
+- `yijing_catalog.py` reads `yijing database/yijing_64_hexagrams.json` and flattens 64 whole-hexagram pages, 384 regular lines, plus 乾用九 and 坤用六: 450 bounded manual positions. Database text, punctuation, and traditional characters are preserved.
+- The bundled font does not provide usable hexagram/trigram glyphs. The renderer therefore draws generic 1-bit yin/yang geometry from each page's upper/lower trigram names; it does not alter classical text.
+- The footer's left `更新 HH:MM` is the server-confirmed `/api/display` response time in UTC+8, never `screen_state.updated_at`. The right battery text keeps the existing thresholds.
 - Output is Pillow mode `1`, white background and black text.
 - It first composes upright 600×800, then applies `Image.Transpose.ROTATE_90` to produce the verified 800×600 source PNG.
-- It always reserves a 56 px footer band. With a valid request battery value, Noto Sans CJK SC Regular 18 px text is right-aligned with the existing 44 px safe margins: `>=20` uses `电量 XX%`, `10–19` adds `· 请充电`, and `0–9` adds `· 充电！`. Missing/invalid battery values render no footer.
+- The fixed footer starts at y=746. It uses 19 px text: content update time at left and valid battery text at right. Missing/invalid battery values render no right footer.
 
 The bundled font is `assets/fonts/NotoSansCJKsc-Regular.otf`, downloaded from the official [`notofonts/noto-cjk`](https://github.com/notofonts/noto-cjk/tree/main/Sans/OTF/SimplifiedChinese) repository. It is distributed under the SIL Open Font License 1.1; the exact license text is included at `assets/fonts/LICENSE`. No system font discovery is used.
 
@@ -118,6 +127,21 @@ python -m unittest discover -s tests -v
 ```
 
 The suite covers provider REST shape/headers and failures, normalized versions, Chinese/manual/automatic wrapping, 300-character and pathological layouts, exact PNG orientation/size, signing tampering/expiry, `compare_digest`, two-version cache behavior, last-known-good fallback, device authentication, signed image delivery, cache-miss rebuild, stale rejection, and Stage 2B-1 regression.
+
+For local visual review, run `python generate_flow_production_previews.py`.
+It writes five upright 600×800 production-renderer images and `flow_metadata.json`
+under `production_previews/`; they do not pass through FastAPI or become Nook assets.
+
+## Schema status
+
+`../supabase/stage-2c-fixed-v2-state.sql` has been manually executed and
+verified by the user in the intended Supabase project: the existing `main` row
+retained its text, while `daily_reminder_text=''` and `yijing_position=0` were
+added. The SQL only adds those columns, their authenticated column update grant,
+and bounds checks; it does not create a table or change RLS policies. Before a
+future Pages/Render deployment, the formal JSON must be committed at
+`yijing database/yijing_64_hexagrams.json`; the loader resolves only that
+repository-relative path.
 
 ## Deployment status and boundary
 

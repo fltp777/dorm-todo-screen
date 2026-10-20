@@ -3,3 +3,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Local-only visual review output; regenerate with the preview scripts.
+layout_previews/
+production_previews/

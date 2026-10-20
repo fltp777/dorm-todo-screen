@@ -62,8 +62,15 @@ class TodoProviderTests(unittest.TestCase):
         )
 
     @staticmethod
-    def valid_payload() -> list[dict[str, str]]:
-        return [{"text": "第一行\r\n第二行", "updated_at": "2026-09-01T01:02:03.123456Z"}]
+    def valid_payload() -> list[dict[str, object]]:
+        return [
+            {
+                "text": "第一行\r\n第二行",
+                "daily_reminder_text": "钥匙\r\n校园卡",
+                "yijing_position": 1,
+                "updated_at": "2026-09-01T01:02:03.123456Z",
+            }
+        ]
 
     def test_uses_exact_rest_query_and_secret_header(self) -> None:
         captured: dict[str, object] = {}
@@ -79,11 +86,13 @@ class TodoProviderTests(unittest.TestCase):
         content = self.provider_for(handler).load()
         self.assertEqual(captured["url"], "https://project.example.supabase.co/rest/v1/screen_state")
         self.assertEqual(captured["id"], "eq.main")
-        self.assertEqual(captured["select"], "text,updated_at")
+        self.assertEqual(captured["select"], "text,daily_reminder_text,yijing_position,updated_at")
         self.assertEqual(captured["apikey"], "sb_secret_test-only-placeholder")
         self.assertIsNone(captured["authorization"])
         self.assertEqual(content.type, "todo")
         self.assertEqual(content.body, "第一行\n第二行")
+        self.assertEqual(content.daily_reminder_text, "钥匙\n校园卡")
+        self.assertEqual(content.yijing_position, 1)
         self.assertEqual(content.updated_at.tzinfo, timezone.utc)
 
     def assert_payload_error(self, payload) -> None:
@@ -108,6 +117,17 @@ class TodoProviderTests(unittest.TestCase):
 
     def test_rejects_body_over_300_characters(self) -> None:
         self.assert_payload_error([{"text": "字" * 301, "updated_at": "2026-09-01T01:02:03Z"}])
+
+    def test_rejects_invalid_new_state_fields(self) -> None:
+        for changes in (
+            {"daily_reminder_text": "字" * 301},
+            {"daily_reminder_text": 1},
+            {"yijing_position": -1},
+            {"yijing_position": 450},
+        ):
+            with self.subTest(changes=changes):
+                row = self.valid_payload()[0] | changes
+                self.assert_payload_error([row])
 
     def test_wraps_timeout_without_leaking_request_details(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:

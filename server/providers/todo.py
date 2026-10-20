@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from content import NormalizedContent, normalize_body
+from yijing_catalog import yijing_page_at
 
 
 class TodoProviderError(RuntimeError):
@@ -49,7 +50,7 @@ class TodoProvider:
         # New sb_secret_ keys are API keys, not JWTs: send only the apikey header.
         return client.get(
             self._url,
-            params={"id": "eq.main", "select": "text,updated_at"},
+            params={"id": "eq.main", "select": "text,daily_reminder_text,yijing_position,updated_at"},
             headers={"apikey": self._secret_key, "Accept": "application/json"},
         )
 
@@ -59,12 +60,23 @@ class TodoProvider:
             raise TodoProviderError("Todo provider returned an unexpected row count")
 
         row = payload[0]
-        if set(("text", "updated_at")) - row.keys():
+        if set(("text", "daily_reminder_text", "yijing_position", "updated_at")) - row.keys():
             raise TodoProviderError("Todo provider returned an incomplete row")
 
         body = row["text"]
+        daily_reminder_text = row["daily_reminder_text"]
+        yijing_position = row["yijing_position"]
         updated_at = row["updated_at"]
-        if not isinstance(body, str) or len(body) > 300 or not isinstance(updated_at, str):
+        if (
+            not isinstance(body, str)
+            or len(body) > 300
+            or not isinstance(daily_reminder_text, str)
+            or len(daily_reminder_text) > 300
+            or isinstance(yijing_position, bool)
+            or not isinstance(yijing_position, int)
+            or yijing_position < 0
+            or not isinstance(updated_at, str)
+        ):
             raise TodoProviderError("Todo provider returned invalid field values")
 
         try:
@@ -73,9 +85,15 @@ class TodoProvider:
             raise TodoProviderError("Todo provider returned an invalid timestamp") from None
         if parsed.tzinfo is None:
             raise TodoProviderError("Todo provider returned a timestamp without timezone")
+        try:
+            yijing_page_at(yijing_position)
+        except ValueError:
+            raise TodoProviderError("Todo provider returned an invalid Yijing position") from None
 
         return NormalizedContent(
             type="todo",
             body=normalize_body(body),
             updated_at=parsed.astimezone(timezone.utc),
+            daily_reminder_text=normalize_body(daily_reminder_text),
+            yijing_position=yijing_position,
         )

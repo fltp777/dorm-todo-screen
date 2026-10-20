@@ -1,5 +1,97 @@
 # Findings & Decisions — through Stage 2B-2 verification
 
+## Stage 2C Right Reminder Gap and Yijing Glyph Width Review（2026-10-02，进行中）
+
+- 当前右栏标题从 `FLOW.content_top_y` 绘制，但正文起点复用了左栏 `_title_end_y(40)`，未使用 `stroke_width=1` 的实际标题 bbox；这使标题与第一条提醒之间仅保留很小的视觉空白。
+- 当前卦象宽度由 `TodoRenderer._glyph_width(size, line_count)` 计算：六爻使用 `round(size * 0.72)`，三爻使用 `round(size * 0.62)`，最小 16 px。thickness 为 `max(1, size // 16)`，yin central gap 为 `max(3, width // 4)`，vertical gap 为 `max(1, size // 15)`。
+- 首张 `yijing_glyph_width_comparison.png` 的候选符号本身清楚，但顶部完整像素说明横跨相邻列；将改为每列短标签和一行紧凑宽度标注，不影响 production renderer。
+- 右栏标题实际 bbox 为 `(415, 33, 577, 75)`；50 px「钥匙」首行 bbox 为 `(416, 91, 516, 139)`，实际黑色像素间距精确为 16 px。body draw y 为 76，最后一条 bbox bottom 为 454，远高于 footer content limit y=730；reminder 字号保持 50 px，项目 line step 仍为 63 px。
+- 对比图使用 30 px heading 样本：current 六爻/三爻为 22/19 px，+15% 为 25/22 px，+20% 为 26/23 px，+25% 为 28/24 px。stroke thickness 为 1 px、vertical gap 为 2 px；yin central gap 保持六爻 5 px、三爻 4 px，不随横向放大。+25% 在当前 regular full、single line 与最长整卦 heading 的宽度测试中仍未超过 340 px 左栏边界。
+- production renderer 最终固定使用 +20%（`YIJING_GLYPH_WIDTH_SCALE=1.20`）横向 scale；它不改变 shared left font、首行 baseline、纵向几何或文本 wrap。右栏最终标题/第一项实际 bbox 间距固定为 16 px（`REMINDER_TITLE_BODY_GAP=16`）。
+
+## Stage 2C Frozen Layout and Deployment-Readiness Audit（2026-10-20，进行中）
+
+- 用户已确认最终生产参数：`YIJING_GLYPH_WIDTH_SCALE = 1.20` 与 `REMINDER_TITLE_BODY_GAP = 16`；Flow 版式和其余视觉比例从此冻结，后续只接受明确 bug 修复。
+- 已将未经改写的正式 JSON 放入当前 worktree 的 `yijing database/yijing_64_hexagrams.json`，并与原始来源 SHA-256 一致。`server/yijing_catalog.py` 现在只解析该 repository-root 相对路径，不再向父目录搜索；这避免本机共享目录掩盖 Render clone 中缺文件的问题。该文件目前尚未被 Git 跟踪，必须在后续人工确认的 commit 中纳入仓库后才会随部署到达 Render。
+- 目录审计结果：源 JSON 为 64 卦、每卦 6 常规爻（384），乾「用九」与坤「用六」各一页，flatten 后共 450 页；position 为 0..449。编辑器的上一条/下一条在边界直接返回，没有自动轮换定时器；冻结的 `NormalizedContent` 与 renderer 只读取 position，render 不回写或推进它。
+- 用户已人工执行并验证 `supabase/stage-2c-fixed-v2-state.sql`：既有 `public.screen_state.main` 的 `text`/`updated_at` 保留，`daily_reminder_text=''` 与 `yijing_position=0` 正常。该 SQL 只对既有表加 `daily_reminder_text text not null default ''` 与 `yijing_position integer not null default 0`，并加 300 字/0..449 check；不含建表、RLS 或 policy 改动。authenticated 的新增列 UPDATE grant 与既有 authenticated-only 模型一致，未增加 anon 权限。
+- refresh footer 取成功 `/api/display` 时的服务端 UTC 时间并在 renderer 转为 UTC+8 `HH:MM`，不使用 Supabase `updated_at`。该 UTC minute 同时进入 display version、签名 URL 的 `r` 参数和 artifact 的 refresh state；cache miss 会按已签名 minute 重建相同图片，cache 上限仍为两个版本。
+- 最终 deliverables 为 `server/production_previews/01_final_regular_full_hexagram.png` 至 `05_final_double_pressure.png`：均为 600×800、mode `1`；metadata 显示无 overflow、无 todo/reminder/Yijing truncation。全套 71 unittest、compileall、三个 root JS syntax check 与 `git diff --check` 均通过。
+- Git 收尾前已删除旧 fixed-v2 helper、纯实验 preview script 和所有生成 PNG/metadata；它们不属于运行时或正式回归输入。保留 `server/generate_flow_production_previews.py` 作为冻结 Flow 的可再生本地 review 工具，并以 `server/.gitignore` 排除 `layout_previews/`、`production_previews/` 输出。
+- 正式 JSON 的工作文件与 source SHA-256 均为 `B606AEAEED14B9CB9AF160B04B59A6BB23876FED12CF245BC9E03A94AF2CBD05`，已进入 staged index；目录统计、71 unittest、compileall、前端 JS syntax 与 staged diff 检查均在 commit 前通过。用户描述的线上 migration 验证结果与 staged SQL 的默认值/约束操作一致；本轮没有再次连接或修改 Supabase。
+
+## Stage 2C Flow Typography Fit Efficiency Audit（2026-10-02）
+
+- Production fit 使用 `left_font_size` 对左栏整体求解；可用范围为 y=22..732，共 710 px，footer 顶线 y=746，保留 14 px 单一安全余量。
+- 发现并修正明确的重复预算：`line_step = ink height + leading`，旧预算把每个块的最后一行也计作完整 `line_step`。新增 `line_box_height` / `wrapped_lines_height`，最后一行只计字面高度；段间距仍只在段与段之间计一次，divider 上下各 10 px 只计一次。
+- `_draw_limited_lines` 与 `_draw_paragraphs_limited` 改用字面高度做边界判断、仍以 `line_step` 推进行间；因此 measurement 与实际 draw 一致。右栏 fit、geometry、footer、divider 规则不变。
+- 修正前五个 shared size 为 28/40/24/24/22；修正后为 30/40/26/24/22。修正后 production preview 仍全部 600×800、1-bit、无 overflow/truncation。
+- 与历史 `server/layout_preview.py` 的 36/40/32/32/26 不可直接比较：历史 preview 使用 mock 易经字段（如整卦 8 行、压力页 6/10/9 行），且标题/易经 heading 独立固定 40 px；production 使用正式数据库真实页面（对应 12/4/11/14/12 行）并执行全左栏 shared-size coupling。因此剩余字号差异来自内容量与规则差异，不是额外重复扣高。
+- 当前 `S+2` 候选因总高超出 710 px 而拒绝：full hexagram 32→-14 px、long todo 28→-51 px、long Yijing 26→-20 px、double pressure 24→-16 px；single line 的 42 px 虽有 122 px余量，但超过配置最大字号 40，不在候选范围。
+- 粗体 stroke_width=1 仅带来约 1 px bbox 扩展，现有 line box 与安全余量足以覆盖；wrap 与 draw 均使用同一字体、宽度和 line step。`layout_preview.py` 仍是历史 local-only helper，不是 production 计算源。
+
+## Stage 2C Flow Layout 与正式易经数据库接线（2026-10-02，进行中）
+
+- 用户已明确把 production 默认从 fixed v2 改为左侧连续 flow layout；fixed-v2 的 y=373 分线不再是正式 renderer 约束。x=392 竖线、y=746 footer、1-bit 600×800 portrait review 输出，以及最终已实机验证的 800×600 预旋转协议仍应保留。
+- 用户已在工作区放入正式易经数据库。本轮必须以实际文件/schema、原文（含传统字与标点）和真实顺序构建 sequence；此前仅供接线验证的两页乾卦 mock catalog 不得继续作为 production 数据源。
+- 用户要求 footer 左侧显示经认证的本次 `/api/display` 成功响应时间（Asia/Shanghai），而非 Supabase `updated_at`。若这要求 artifact 重新渲染，必须采用有界 cache，且在实现与测试后明确说明最小 version/signed URL 改动。
+- 正式数据库文件为共享工作区 `yijing database/yijing_64_hexagrams.json`（137,592 bytes）；顶层实际为 `hexagrams` 64 条、命名 `trigrams` dict 和 source metadata。每卦 6 条 regular lines，只有 #1 乾有用九、#2 坤有用六；展平后为 64 + 384 + 2 = 450 页。服务器的 path resolver 先找 checkout 根目录，再兼容当前 managed-worktree 的共享父目录；未来部署前 JSON 必须放进 repository-visible 的同名根目录。
+- flow 正式 renderer 只保留 x=392 竖线与 y=746 footer；它从最终待办行高计算 divider。旧 `renderer/fixed_v2_layout.py` 仍是未提交的历史 preview/local 文件，但不被 production `TodoRenderer` 导入。
+- refresh footer 采用 UTC minute state `r`：每次认证成功 `/api/display` 的 UTC minute 同 content version、电量 `b` 一起 hash，并包含在 HMAC canonical data。最多两项 artifact cache 仍有界；图片端 cache miss 可借签名的 `r` 重建相同 `更新 HH:MM`。这反映服务器可确认的成功响应时间，而不是无法由服务器证明的 Nook 实际刷屏时刻。
+- 生产 preview 的 5 图均为 mode `1`、600×800、无截断/越界。metadata：普通整卦 (todo 42/header 40/body 22/reminder 50/divider 355/height 654)，普通单爻 (48/40/40/50/450/697)，长待办 (32/40/22/50/402/701)，长易经坤卦 (38/40/22/50/320/700)，双压力 (24/40/22/50/322/702)。实际长坤卦在正文已经到 22 px 后仍有压力，才进一步缩小待办；这解释了其 divider 与普通乾卦并非相同。
+- 本轮 typography 修正：左栏不再有独立 todo/header/body fit。候选 `S=40,38,...,22` 同时测量标题、待办、divider gaps、易经 heading 和全部易经正文；最大完整候选成为 `left_font_size`。五张新图的共享字号为 28、40、24、24、22；右提醒均为 50；均无 overflow/truncation。标题与易经 heading/卦名/爻名只使用 stroke bold，正文保持 regular。
+- 共享字号修正后的最终 metadata：01 `28/50/215`，02 `40/50/340`，03 `24/50/301`，04 `24/50/185`，05 `22/50/283`（格式为 shared-left/reminder/divider）。极端无法完整容纳的内容现在抛出安全 renderer error，不再省略或跨越 footer；五个指定 preview 均可完整显示。
+
+## Fixed v2 Production Renderer Wiring（2026-10-02，进行中）
+
+- 现有正式 `screen_state` 访问只选择/更新 `text, updated_at`；仓库内没有 `daily_reminder_text`、`yijing_position`、易经 catalog 或 Stage 2C migration。现有 `TodoProvider` 同样只读 `text,updated_at`，而 `TodoRenderer` 是单段居中渲染，尚未使用 600×800 分区版式。
+- 本轮最小状态方案：保留 `text` 作为短期待办，新增 `daily_reminder_text` 与 `yijing_position`；仅新增待执行的本地 SQL migration，并扩展 authenticated 的列级 UPDATE grant，不改变 RLS/policy、不连接或修改线上 Supabase。
+- 因用户未提供正式《周易》资料，不能擅自收集/制造完整语料。本轮只接入此前用户提供的乾卦整卦与初九两页作为最小 catalog，用于验证手动上一条/下一条 position；不自动轮换、不随机、不按时间推进。
+- 正式 layout 选择 fixed v2：x=392、左横线 y=373、footer 顶线 y=746；待办、易经、右栏各自 fit。flow preview 保留，但不进入默认 renderer；若 fixed-v2 最小字号仍 overflow，本轮优先采用 fixed-v2 only + 显式 overflow detection，而不是静默 fallback。
+- 已由 production `TodoRenderer.render_portrait()` 首次生成五张 review PNG：常规整卦 42/34 px、单爻 42/40 px、长待办 26/34 px、长易经 42/24 px、双压力 26/24 px（todo/Yijing），均为 600×800 mode `1`、无 overflow、无 flow fallback。双压力 fixed-v2 因此不需要 fallback。
+- 初次图面检查发现 production 易经首行直接绘制 `☰` 会显示 bundled Noto 的缺字方框；这与 preview 已知字体覆盖限制一致。已将 renderer 改为复用 preview 的 1-bit 乾卦/三爻线条兼容画法，待重新生成五图后复核。该修正不更换字体或生产方向。
+- 重新生成并目视复核常规整卦与长易经图，首行已不再出现缺字方框；固定分线、右栏、footer 均保持预览确定的坐标，所有五图的 metadata 都是 `mode=1`、600×800、overflow=false、fallback=false。
+- `fixed_v2_layout.py` 是 preview 和 production 共用的 geometry/自动换行/fit source。production 输出仍在最后逆时针旋转为已实机验证的 800×600 PNG；本地 `production_previews/` 保留的是旋转前 600×800 人工审查图。
+- 全量自动测试为 66/66；包括 fixed v2 常规整卦/单爻、长待办、长易经、双压力、固定 y=373、独立字号、overflow detection、位置不因 render 改变、editor/store/migration 接线和既有 BYOS/signing/cache 回归。所有前端 JS 也通过 `node --check`。
+
+## 连续流式左区 Preview（2026-10-02，进行中）
+
+- 新 preview 只画 x=392 竖线和 y=746 状态栏线；左侧不再画 y=258 或 y=373 横线。待办完成后以 10 px 上下间距和 1 px 动态横线衔接易经首行。
+- 初次生成 metadata：常规整卦共享正文 36 px、单爻 40 px、长待办 32 px、长易经 32 px、双压力 26 px；右栏维持独立 50 px，五个样本均未发生裁断。
+- 已目视复核常规整卦与双压力图：标题与底栏没有被覆盖，动态线只在左区 x=26..366；`【标签】` 与正文保持同一 Regular 字重/字号，续行回到 x=26。预览中的卦象仍是已有的 1-bit 线条替代画法，并非生产字体变动。
+- 单爻样本能维持 40 px 共享正文，因内容很短而自然留下大片空白；这正说明 flow 不强行把易经拉满 1/2 区。8 条待办样本保持 32 px，易经随其同缩为 32 px，整块仍完整并比固定 1/2 的待办 26 px 更大。
+- 同 v2 精确对比：常规整卦 flow=36 px（v2 todo=42、Yijing=34）；单爻 flow=40（v2=42/40）；待办压力 flow=32（v2=26/34）；易经压力 flow=32（v2=42/24）。flow 显著释放了长易经的空间（+8 px）和长待办的空间（+6 px），但共享字号使一方变长时另一方也变小。
+- 动态线的 y 值会随左侧字号和待办换行变化：常规整卦 y=270、单爻 y=340、待办压力 y=402、长易经 y=246、双压力 y=346。尤其同一待办在整卦/单爻因易经体量不同而改变字号和分隔线位置，视觉稳定性低于 v2 的固定 y=373；正式版若重视稳定阅读，应优先固定 1/2，若重视压力内容的完整性才考虑 flow。
+
+## 600×800 Layout Preview Baseline (2026-10-02)
+
+- 当前可运行实现位于隔离 worktree `codex/battery-display`；父目录的旧 `master` 是早期代码树，不能作为本轮预览脚本落点。
+- 正式 `TodoRenderer` 使用仓库内 `server/assets/fonts/NotoSansCJKsc-Regular.otf`，字体家族为 Noto Sans CJK SC Regular；项目仅随附 Regular 字重和 `LICENSE`（SIL Open Font License 1.1）。预览只能用轻微 `stroke_width=1` 模拟标签/标题加粗，不能声称使用了真 Bold。
+- 已实机验证的生产方向不变：先画 upright 600×800 portrait，再用 `Image.Transpose.ROTATE_90` 逆时针预旋转输出 800×600；TRMNL v0.16.0 在 Nook 上顺时针旋转后回到正确竖屏。本轮人工比较文件故意保留未旋转的 600×800 portrait。
+- 现有 renderer/test 已验证其输出为 mode `1`、PNG、800×600；本轮的独立脚本不得被 `/api/display`、cache 或 signed URL 导入。
+- 首轮可视化输出确认：当前 bundled Noto CJK SC Regular 对 `䷀` 与 `☰` 显示为缺字方框；本机 Segoe UI Symbol 也不能可靠画出六爻 `䷀`。为保证预览真实可读又不引入机器相关字体依赖，preview 对这两个全阳符号改用简单 1-bit 线条绘制。中文和所有正文仍使用 bundled Noto；该 workaround 仅服务版面比较，绝不构成生产 glyph-rendering 方案。正式实现前仍需用户确认可合法随 Render 部署、且覆盖简繁中文和易经符号的字体资产，或接受不用符号的文案方案。
+- 完成的 geometry 固定为：竖线 x=392，左上/左下短横线 y=258，底栏顶线 y=746；左/右屏边距 26、右栏内边距 24。左栏正文宽 340；易经 label x=26、label width=58、gap=14、body x=98、body width=268；右栏文本宽 158。
+- 整卦页中 `彖曰` 的长正文发生像素自动换行，所有续行从 body x=98 开始；压力页中带 `\n` 的 `大象` 以及无空格长 `彖曰` 均保留这一 hanging indent，没有进入 label 列、分隔线或状态栏。
+- 压力页的 8 项待办在固定左上区域触发截断，最后可见行以 `…` 表示；右栏的较长提醒与易经压力正文在本组 B 尺寸下仍可放入。最先受到空间约束的是 258 px 高的左上待办区，其次是 158 px 宽的右栏，不是 268 px 宽的易经正文列。
+- 预览采用固定字号，不做自动缩小：某区域行数超过边界时只在最后可见行省略，不跨越边界。所有 9 个生成文件均经脚本复开确认 format=PNG、mode=`1`、size=600×800。
+
+## E1/E2/E3 and Auto-scale Preview Findings (2026-10-02)
+
+- 固定 geometry 不变。`x=26` 到 `body_x=98` 只有 72 px 的 label slot；模拟粗体后两字横排标签在 32 px 可留小间隙、36 px 已贴到正文起点、40 px 需要约 82 px，无法同时保持横排和不侵入正文。E2/E3 因此采用两字竖排标签这一 preview-only 安全替代；自动缩放从 40 每次减 2 px 后选择 34 px 的安全横排字号。
+- 初步图面复核：E1 38 px 待办已经因长项目自动换行为约四可见行并截断；E2 44 px 约两项后截断；E3 50 px 在左上只适合约两项、并触发省略。右栏的常规六项提醒在 50 px 仍纵向放得下，但每项三字几乎用满 158 px 宽度。
+- 自动缩放常规整卦页维持右栏大字，同时将左上待办和易经文字缩至可完整容纳的值；压力待办按规则缩小且仍需末行省略。长彖曰压力页的正文缩小后保持 `body_x=98` 的悬挂缩进，未跨分隔线或状态栏。
+- 生成 metadata 的实际自动值：常规整卦/单爻均为 title=40、todo=32、reminder=50、header=40、label=34、body=40、footer=19；待办压力为 todo=24（仍截断）；长易经压力为 body=24（完整）。自动 label 不是 40 的原因是固定 72 px slot + `stroke_width=1` 的确定性几何限制，而不是纵向空间。
+- 固定版结果：E1/E2/E3 的常规右栏均完整；三者左上待办均截断，E3 整卦页易经内容也截断。E2/E3 的 36/40 px 标签以竖排两字保持分列；这证明“固定大字号 + 固定 geometry + 横排两字标签”三者不能同时成立。
+- 推荐仅基于本地 PNG：固定字号优先 E1（整卦内容完整、仍明显比旧 B 大）；E2 更适合单爻页或接受竖排标签的场景；E3 是清楚的远距离上限测试，不适合作为包含整卦的通用固定版。自动缩放最适合作为正式方向，因为常规时保留 50 px 提醒和 40 px 易经正文，压力内容才局部缩小/省略。Nook 的实际反差、1 px 分隔线可见性仍需实机确认。
+
+## Equal-height / No-label-column Preview v2 (2026-10-02)
+
+- v2 使用左侧分线 `y=373`，左上高度 373、左下高度 373（状态栏前），右栏仍从 y=0 贯穿到 y=746。易经正文从 x=26 开始，宽度 340；没有 label width、body_x、hanging indent 或独立标签样式。
+- 初轮 v2 图面确认取消 label 列使段落横向空间完整，但简单逐字 wrap 会把中文 `。` / `，` 单独置于行首或成单字符行。第一版禁则虽移除了孤立标点，却产生 `勿。` / `用` 这种不自然拆分；改为将末尾两个汉字与 closing punctuation 一起移入下一行后重新生成。此问题及修复仅存在于独立 preview helper，不修改正式 renderer。
+- v2 最终 metadata：常规整卦为 todo=42、reminder=50、header=40、body=34、footer=19；常规单爻为 42/50/40/40/19；8 条待办压力为 todo=26，完整；长易经压力为 body=24，完整。所有 v2 PNG 的 clipped flags 均为 false。
+- 同字号横向行数比较（v2 340 px 全段落，旧逻辑 268 px body-only hanging indent）：常规整卦为 6 vs 7，减少 1 行；长易经压力为 9 vs 10，减少 1 行。单爻内容在 40 px 时为 4 vs 3，因 `【爻辭】`/`【小象】` 本身占用字符，并不存在需要回收的长段落空间；不能把它误报为布局退化。
+- 等高调整把易经区从原先 488 px 缩至 373 px（少 115 px）。取消 label 列把可用行宽由 268 增至 340（多 72 px，约 27%），可减少长文换行，但不能完全抵消高度损失：常规整卦正文从旧 auto 的 40 px 降至 v2 的 34 px；长文压力两版均落到 24 px。
+
 ## Battery-display Design Audit (2026-09-21)
 
 - 审计范围为只读设计与源码核对：不修改 FastAPI、renderer、Supabase、Render、Nook 或 Git 历史。
