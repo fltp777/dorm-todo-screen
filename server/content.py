@@ -12,12 +12,20 @@ class NormalizedContent:
     type: str
     body: str
     updated_at: datetime
+    daily_reminder_text: str = ""
+    yijing_position: int = 0
 
     def __post_init__(self) -> None:
         if not self.type:
             raise ValueError("Content type is required")
         if not isinstance(self.body, str):
             raise TypeError("Content body must be a string")
+        if not isinstance(self.daily_reminder_text, str):
+            raise TypeError("Daily reminder text must be a string")
+        if isinstance(self.yijing_position, bool) or not isinstance(self.yijing_position, int):
+            raise TypeError("Yijing position must be an integer")
+        if self.yijing_position < 0:
+            raise ValueError("Yijing position must not be negative")
         if self.updated_at.tzinfo is None:
             raise ValueError("updated_at must include a timezone")
 
@@ -60,7 +68,32 @@ def battery_percent_from_state(state: str) -> int | None:
     return value
 
 
-def display_version(content: NormalizedContent, battery_percent: int | None) -> str:
-    """Version the rendered artifact by both content and request-only battery state."""
-    source = f"{content_version(content)}\0{battery_state(battery_percent)}"
+def refresh_state(refresh_at: datetime | None) -> str:
+    """Encode the successful display response minute for a reproducible footer."""
+    if refresh_at is None:
+        return "none"
+    if refresh_at.tzinfo is None:
+        raise ValueError("Refresh timestamp must include a timezone")
+    return str(int(refresh_at.astimezone(timezone.utc).timestamp()) // 60)
+
+
+def refresh_at_from_state(state: str) -> datetime | None:
+    """Decode a signed UTC minute without trusting a free-form timestamp."""
+    if state == "none":
+        return None
+    if not state.isascii() or not state.isdigit():
+        raise ValueError("Refresh state is invalid")
+    minute = int(state)
+    if minute < 0 or str(minute) != state:
+        raise ValueError("Refresh state is invalid")
+    return datetime.fromtimestamp(minute * 60, tz=timezone.utc)
+
+
+def display_version(
+    content: NormalizedContent,
+    battery_percent: int | None,
+    refresh_at: datetime | None = None,
+) -> str:
+    """Version content, battery, and the server-confirmed refresh display minute."""
+    source = f"{content_version(content)}\0{battery_state(battery_percent)}\0{refresh_state(refresh_at)}"
     return hashlib.sha256(source.encode("utf-8")).hexdigest()[:20]

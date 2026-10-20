@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 
 from config import Settings, normalize_device_id
-from content import battery_percent_from_state, battery_state
+from content import battery_percent_from_state
 from display_service import DisplayService, DisplayUnavailable, StaleContentVersion
 from security.signed_url import SignedImageURL
 
@@ -97,7 +97,8 @@ def display(
         artifact = _get_display_service(request).current(battery_percent)
         signed_path = _get_image_signer(request).signed_path(
             artifact.version,
-            battery_state(battery_percent),
+            artifact.battery_state,
+            artifact.refresh_state,
         )
     except (DisplayUnavailable, ValueError):
         raise HTTPException(
@@ -119,11 +120,12 @@ def current_screen(
     request: Request,
     v: str | None = None,
     b: str | None = None,
+    r: str | None = None,
     exp: str | None = None,
     sig: str | None = None,
 ) -> Response:
     signer = _get_image_signer(request)
-    if not signer.verify(v, b, exp, sig):
+    if not signer.verify(v, b, r, exp, sig):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid or expired image URL",
@@ -133,6 +135,7 @@ def current_screen(
         artifact = _get_display_service(request).for_version(
             v or "",
             battery_percent_from_state(b or ""),
+            r or "",
         )
     except StaleContentVersion:
         raise HTTPException(

@@ -1,6 +1,6 @@
 # 宿舍电子待办屏
 
-当前状态：**Stage 2B-1：COMPLETED / VERIFIED**；**Stage 2B-2：COMPLETED / VERIFIED**。动态待办服务已部署到 Render，并在 Nook Simple Touch BNRV300 上完成真实 editor → Supabase → Render → Nook 端到端验收。
+当前状态：**Stage 2B-1：COMPLETED / VERIFIED**；**Stage 2B-2：COMPLETED / VERIFIED**。Stage 2C 左侧 flow 信息屏与正式易经数据库接线目前为 **LOCAL IMPLEMENTATION ONLY**：未执行 schema migration、未部署 Render、未更新 Nook。
 
 已完成并经用户真实验收：
 
@@ -31,7 +31,7 @@
 - 使用随项目分发的 Noto Sans CJK SC Regular，将 300 字以内正文排成严格黑白 600×800 portrait，再逆时针预旋转为 800×600 PNG。
 - 使用 `updated_at` 派生内容版本；相同版本复用最多两个 artifact 的进程内缓存。
 - `/api/display` 继续校验 `ID` + `access-token`，只返回约 900 秒有效的 HMAC-SHA256 签名图片 URL，不返回正文或 server secret。
-- `/screen/current.png` 无需 Nook 额外 header，但必须通过 `v`、`b`、`exp`、`sig` 验证；Stage 2B-1 `/screen/test.png` 继续保留。
+- `/screen/current.png` 无需 Nook 额外 header，但必须通过 `v`、`b`、`r`、`exp`、`sig` 验证；Stage 2B-1 `/screen/test.png` 继续保留。
 
 - Render 构建及 FastAPI 启动成功，公网 `/health`、设备认证 `/api/display` 与动态 signed image URL 均正常。
 - Render 从真实 Supabase `screen_state.main` 读取手机网页保存的内容，而不是 mock、test fixture 或固定 TEST 01 校准图。
@@ -72,7 +72,7 @@ Nook v0.16.0
         ↓  ID + access-token
 BYOS GET /api/display
         ↓  signed image_url
-GET /screen/current.png?v=...&b=...&exp=...&sig=...
+GET /screen/current.png?v=...&b=...&r=...&exp=...&sig=...
         ↓  客户端顺时针旋转
 预期 600x800 竖屏显示
 ```
@@ -215,13 +215,23 @@ Supabase text + updated_at
 
 硬件端不得重新开放 anon SELECT。`/api/display` 使用独立 device ID/API key；固定校准图继续公开用于诊断，真实内容图使用短期 HMAC 签名 URL，因为 v0.16.0 下载图片时不转发认证 header。
 
-## 数据模型保持不变
+## Stage 2C flow 本地接线（迁移已执行，尚未部署）
+
+- 生产默认布局为左侧连续 flow：竖线 x=392、状态栏 y=746，左侧不再有固定 y=373 分线。待办结束后以动态 1 px 横线衔接易经内容。
+- 左栏所有内容共享一次求解的 `left_font_size`（40→22 px）：短期待办标题、待办正文、易经 heading/卦名/爻名和全部易经正文同字号，仅用粗体表达层级；右栏每日提醒继续独立 fit。
+- editor 已增加每日提醒和手动易经上一条/下一条，浏览器和服务器均从 `yijing database/yijing_64_hexagrams.json` 的 450 条正式 flattened sequence 读取导航信息；不自动按时间、随机或 refresh 推进。
+- [`supabase/stage-2c-fixed-v2-state.sql`](supabase/stage-2c-fixed-v2-state.sql) 已由用户人工执行并验证：既有 `main` 行的正文保留，新增字段默认分别为 `''` 与 `0`。该 migration 只扩展既有状态行字段及 authenticated 的列级 UPDATE grant，不改 RLS、不新增表。
+- `server/generate_flow_production_previews.py` 可按需生成本地 600×800 复核图；输出目录受 Git 忽略，不属于 FastAPI/Nook 资产。
+
+## 扩展后的待部署数据模型
 
 ```text
 screen_state
 ├── id
 ├── text
+├── daily_reminder_text
+├── yijing_position
 └── updated_at
 ```
 
-`updated_at` 作为动态渲染内容版本，不新增 version/image URL 列。Stage 2B-2 不修改此数据模型、grants 或 RLS。
+`updated_at` 仍作为动态渲染内容版本，不新增 version/image URL 列。新增字段已由上述人工 migration 写入线上 schema；RLS、签名、cache 与 Nook 协议没有因 migration 改动。Stage 2C 代码尚未部署到 Render。

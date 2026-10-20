@@ -10,6 +10,7 @@
     <script src="supabase-client.js" defer></script>
     <script src="auth-store.js" defer></script>
     <script src="screen-store.js" defer></script>
+    <script src="yijing-content.js" defer></script>
     <script src="auth-guard.js" defer></script>
     <script src="editor.js" defer></script>
   </head>
@@ -23,7 +24,7 @@
 
       <section class="editor-card" aria-labelledby="editor-label">
         <div class="field-heading">
-          <label id="editor-label" for="todo-text">屏幕内容</label>
+          <label id="editor-label" for="todo-text">短期待办</label>
           <output id="char-count" for="todo-text" aria-live="polite">0 / 300</output>
         </div>
         <textarea
@@ -32,6 +33,28 @@
           rows="10"
           placeholder="在这里输入想显示在宿舍屏幕上的文字……"
         ></textarea>
+
+        <div class="field-heading secondary-field-heading">
+          <label for="daily-reminder-text">每日提醒</label>
+          <output id="reminder-char-count" for="daily-reminder-text" aria-live="polite">0 / 300</output>
+        </div>
+        <textarea
+          id="daily-reminder-text"
+          maxlength="300"
+          rows="5"
+          placeholder="例如：钥匙、电脑、校园卡、水杯……"
+        ></textarea>
+
+        <section class="yijing-controls" aria-labelledby="yijing-label">
+          <div>
+            <p id="yijing-label" class="yijing-controls-title">易经阅读</p>
+            <p id="yijing-current" class="yijing-current" aria-live="polite"></p>
+          </div>
+          <div class="yijing-actions">
+            <button id="yijing-previous-button" class="secondary-button" type="button">上一条</button>
+            <button id="yijing-next-button" class="secondary-button" type="button">下一条</button>
+          </div>
+        </section>
 
         <div class="editor-actions">
           <button id="update-button" type="button">更新屏幕</button>

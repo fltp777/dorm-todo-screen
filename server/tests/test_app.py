@@ -38,7 +38,7 @@ class PngRenderer:
         self.calls = 0
         self.fail = False
 
-    def render(self, content: NormalizedContent, battery_percent: int | None = None) -> bytes:
+    def render(self, content: NormalizedContent, battery_percent: int | None = None, *, refresh_at=None) -> bytes:
         self.calls += 1
         if self.fail:
             raise RuntimeError("renderer failure")
@@ -98,8 +98,9 @@ class ByosApiTests(unittest.TestCase):
         parsed = urlparse(payload["image_url"])
         query = parse_qs(parsed.query)
         self.assertEqual(parsed.path, "/screen/current.png")
-        self.assertEqual(set(query), {"v", "b", "exp", "sig"})
+        self.assertEqual(set(query), {"v", "b", "r", "exp", "sig"})
         self.assertEqual(query["b"], ["63"])
+        self.assertRegex(query["r"][0], r"^[0-9]+$")
         self.assertEqual(payload["refresh_rate"], 300)
         self.assertTrue(payload["filename"].startswith("todo-"))
         serialized = response.text
@@ -167,11 +168,12 @@ class ByosApiTests(unittest.TestCase):
         query = {key: values[0] for key, values in parse_qs(parsed.query).items()}
         cases = [
             "/screen/current.png",
-            f"/screen/current.png?v={query['v']}&b={query['b']}&exp={query['exp']}&sig=wrong",
-            f"/screen/current.png?v={query['v']}&b=62&exp={query['exp']}&sig={query['sig']}",
-            f"/screen/current.png?v={'f' * 20}&b={query['b']}&exp={query['exp']}&sig={query['sig']}",
-            f"/screen/current.png?v={query['v']}&b={query['b']}&exp=invalid&sig={query['sig']}",
-            f"/screen/current.png?v={query['v']}&b=101&exp={query['exp']}&sig={query['sig']}",
+            f"/screen/current.png?v={query['v']}&b={query['b']}&r={query['r']}&exp={query['exp']}&sig=wrong",
+            f"/screen/current.png?v={query['v']}&b=62&r={query['r']}&exp={query['exp']}&sig={query['sig']}",
+            f"/screen/current.png?v={query['v']}&b={query['b']}&r=999999&exp={query['exp']}&sig={query['sig']}",
+            f"/screen/current.png?v={'f' * 20}&b={query['b']}&r={query['r']}&exp={query['exp']}&sig={query['sig']}",
+            f"/screen/current.png?v={query['v']}&b={query['b']}&r={query['r']}&exp=invalid&sig={query['sig']}",
+            f"/screen/current.png?v={query['v']}&b=101&r={query['r']}&exp={query['exp']}&sig={query['sig']}",
         ]
         for path in cases:
             with self.subTest(path=path):

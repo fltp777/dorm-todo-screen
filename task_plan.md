@@ -1,5 +1,154 @@
 # Task Plan: Stage 2B-2 实机验收 checkpoint
 
+## Stage 2C Git 收尾（2026-10-20）
+
+**Goal:** 用户已人工执行并验证 Stage 2C Supabase migration；清理纯本地预览产物，纳入正式 Flow/易经/迁移代码与数据库，完成最终回归，创建 commit 并仅 push 当前工作分支。
+
+- [x] 检查 worktree、正式 JSON 路径/原始 SHA-256，区分正式源文件与实验 preview
+- [x] 删除 fixed-v2/local preview 源与生成 PNG，并以 `server/.gitignore` 排除可再生 preview 输出
+- [x] 暂存正式 Stage 2C 文件，确认 JSON 已 Git tracked
+- [x] 完成 compile、unittest、JS、diff、secret 与 450 页目录复核
+- [ ] 创建 Stage 2C commit，non-force push 当前分支并确认远端
+
+**Status:** in progress — 用户报告 migration 已人工执行并验证；不部署、不 merge、不修改 Supabase。
+
+**Error note:** linked worktree 的 `.git/worktrees/...` 元数据在受限沙箱内拒绝 `git fetch` 的 `FETCH_HEAD` 与 `git add` 的 `index.lock` 写入；经用户授权在本机正常 Git 环境中完成，未使用 force。一次目录统计从仓库根导入 server module 而找不到 `yijing_catalog`；改从 `server/` cwd 后通过，未改代码。
+
+## Stage 2C Right Reminder Gap and Yijing Glyph Width Review（2026-10-02）
+
+**Goal:** 保持已冻结的 Flow 左栏、shared `left_font_size`、动态 divider、数据库、footer 与服务链路，只修正右栏标题到第一条正文的实际 bbox 间距，并生成卦象横向宽度 A/B/C 候选及 production 预览。
+
+- [x] 恢复当前 Flow renderer、测试与既有 planning 状态
+- [x] 以与 draw 相同的粗体 bbox 测量右栏标题，并应用 16 px 正文间距
+- [x] 生成 current/+15%/+20%/+25% 卦象横向比例对照图；production preview 暂用 +20% 候选
+- [x] 增加局部回归测试，生成五张 production preview 并完成验证
+
+**Status:** complete — user selected and froze +20% (`1.20`) glyph width and 16 px reminder title/body gap; no deployment, migration, commit, or push.
+
+## Stage 2C Frozen Layout and Deployment-Readiness Audit（2026-10-20）
+
+**Goal:** 将验收的 `YIJING_GLYPH_WIDTH_SCALE=1.20` 与 `REMINDER_TITLE_BODY_GAP=16` 固定为 production 默认，冻结版式；核对正式易经 JSON、migration、refresh/cache/signed URL 与 Git 部署准备，生成最终五张 preview，不执行外部写入。
+
+- [x] 确认最终视觉参数与冻结范围
+- [x] 将原始正式易经 JSON 原样复制到本 worktree 的 `yijing database/`，并以 SHA-256 确认字节一致；loader 只解析该 repository-root 相对路径
+- [x] 生成 final 命名 preview、完成目录/migration/refresh/cache 审计与完整离线回归
+- [x] 将正式 JSON 放入当前 Git worktree 的稳定可部署路径，并移除 loader 对共享上级目录的运行时依赖
+- [x] 审计 display pages、position 边界、migration、refresh/cache/signed URL 与 artifact 上限
+- [x] 生成 `01_final` 至 `05_final` preview，并运行全部部署前检查
+
+**Status:** complete — JSON 位于本 worktree 的 repository-root 相对部署路径，loader 无 parent fallback；它仍是未跟踪工作文件，下一次经人工确认的 commit 才会使 Render clone 可见。最终五图、71/71 unittest、compileall、JS syntax、preview 验证、diff/secret 审计均已完成；没有外部写入。
+
+## Stage 2C Flow Typography Fit Efficiency Audit（2026-10-02）
+
+**Goal:** 保持现有 Flow 设计、动态 divider、右栏、footer、数据库与服务链路不变，只核对 production shared-font 高度预算；若发现明确的重复尾部 leading，则做最小测量/绘制一致性修正。
+
+- [x] 对五个 production sample 逐项输出最终字号与 `S+2` 高度预算
+- [x] 确认 production 与历史 local preview 的内容/测量差异来源
+- [x] 修正左栏块预算对最后一行 trailing leading 的重复计入；不改安全边界
+- [x] 重新生成五张 production preview，完成 68/68 unittest、compile、图像与 diff 检查
+
+**Status:** complete — current selected shared sizes are 30 / 40 / 26 / 24 / 22; no deployment, migration, commit, or push.
+
+## Stage 2C Flow Layout 与正式易经数据库接线（2026-10-02）
+
+**Goal:** 用户已明确撤销 fixed v2 作为正式默认的决定。将 production renderer 改为左侧连续 flow layout，并以工作区 `yijing database` 的真实 64 卦数据生成有限、可手动定位的页面序列；保留既有 Stage 2B API、签名 URL、缓存和预旋转协议，必要时仅为“本次成功 `/api/display` 请求时间”做最小且有界的缓存/version 扩展。不得连接真实 Supabase、执行 migration、部署、commit 或 push。
+
+- [x] 记录方向变更并恢复当前本地工作树、旧 fixed-v2 接线与规划记录
+- [x] 完整审计易经数据库文件、实际 schema、64 卦顺序与可用爻/用九/用六字段
+- [x] 以真实数据替换两页 mock catalog，并让 provider/editor 的 position 共享同一扁平序列
+- [x] 将 production portrait renderer 切换为 flow layout；保留 800×600 预旋转输出、右栏与 footer 边界
+- [x] 为认证成功请求时间设计有界 artifact/version/signed-url 传递，并补覆盖性测试
+- [x] 生成五张指定 production review PNG，逐项记录字号、动态分线、总高度和 overflow
+- [x] 运行 Python/JS/图像/回归/secret/diff 检查；仅保留本地未提交变更
+
+**Status:** complete — flow is the production renderer direction locally. Earlier fixed-v2 local artifacts remain uncommitted historical/preview material, but production code has no fixed y=373 path. No external change was made.
+
+## Stage 2C Flow Shared Typography Correction（2026-10-02）
+
+**Goal:** 保持 flow、动态 divider、右栏、数据库、API、signed URL、cache、Supabase、电量和 footer 全部不变，只把左栏改为一个共享 `left_font_size` 的整体 fit。
+
+- [x] 标题、待办、易经 heading/卦名/爻名与全部易经正文统一使用同一候选字号
+- [x] 仅以粗体表达左栏标题层级，不再以字号形成独立层级
+- [x] 重新生成五张 production flow preview，并改为 shared-font metadata
+- [x] 增加 left typography equality tests；完成 compile、66 tests、图像、JS、secret、diff 检查
+
+**Status:** complete — no deployment, migration, commit, or push.
+
+**Error note:** 本轮第一次 compile 命令从 `server/` cwd 仍使用 `server\\renderer\\...` 路径，产生路径不存在；生成脚本随后正常运行，最终编译需使用 server cwd 下的相对路径。
+
+**Error note:** 首次 Python schema inspection 把顶层 `trigrams` 当作 list 索引，实际为命名 dict，因而出现 `KeyError: 0`；未写入任何文件，随后已按实际 schema 成功读取首卦、末卦与两个 special-use 记录。首次 renderer smoke command 从 worktree root import `renderer`，以及 `ZoneInfo("Asia/Shanghai")` 在本机缺少 tzdata 时均失败；前者已从 `server/` 重跑，后者已换为不依赖 tzdata 的固定 UTC+8。一次包含多文件 hunk 的 README patch 因末尾上下文不精确而整体未应用；已拆成定点 patch。一次临时字号探查的 PowerShell/Python 转义错误只产生 SyntaxError，未写入文件。
+
+第二次全量 unittest 从 worktree root 使用 `-s server/tests` 启动，既有 tests 预期 cwd 是 `server/`，因此出现 five `ModuleNotFoundError`；compile、JS、五图检查、diff 和凭据检查仍完成。该失败不作为代码回归结果，后续将从既有约定的 `server/` cwd 重跑。
+
+## Fixed v2 Production Renderer Wiring（2026-10-02）
+
+**Goal:** 将已验收的 fixed v2（x=392、左分线 y=373、footer y=746）接入本地 production renderer；待办和易经分别自适应，右侧提醒独立。补足最小状态/编辑器接线、schema migration、生产回归 PNG 与自动测试。保留 flow preview 但不设为生产默认；不部署、不连接真实 Supabase、不 commit/push。
+
+- [x] 恢复现有 preview、production renderer、editor/store 与仓库内 schema 资料
+- [x] 为 preview/production 抽取共同 fixed-v2 layout helper，并补 fixed-v2 双压力回归
+- [x] 以最小字段扩展 screen state、provider 与 editor 的 todo/reminder/yijing position 接线
+- [x] 生成五张 production preview，覆盖 regular/压力/边界和 overflow detection
+- [x] 完成自动测试、compile/diff/secret/范围检查与文档记录
+
+**Status:** complete — fixed v2 is the only production layout mode. The local-only migration remains unexecuted; no Render, Supabase, Nook, commit, push, or deployment action was performed.
+
+**Error note:** 本轮首次 session-catchup 直接执行 `.py`，PowerShell 因权限拒绝而未运行；后续已通过明确的 Python 解释器调用（无未同步报告）完成。一次 editor JS 的组合 patch 因初始化段上下文不完全匹配而未应用；已读取后改为替换完整小文件，不重复该 hunk。首次全量 unittest 在新 renderer 接线后为 48 pass / 10 error：旧 `test_renderer` 断言已移除的单段 `layout_text/footer_layout`，provider fixture 仍是两字段旧 row；这不是 runtime 异常，将迁移测试至 fixed-v2 契约和完整新 row 后重跑。首轮 secret 文件名扫描把前端的 `service_role` 防泄露注释误识别为 secret；不采信该结果，将改为精确检查 `.env`、真实 `sb_secret_` 值及 credential assignment，避免重复宽泛 marker 扫描。第二次 assignment regex 因 PowerShell/PCRE 引号组合造成 character-class 编译错误，命令仍继续执行，结果不计入通过；改用不含引号 class 的逐项固定模式并检查 `rg` exit code。第三次 device env 扫描未正确排除允许的 `server/.env.example`，故不采信；`.env` 已单独确认不存在，下一次只将 `.env.example` 作为允许的唯一 env 文件处理。
+
+## 左侧连续流式信息区 Preview（2026-10-02）
+
+**Goal:** 只扩展本地 `server/layout_preview.py` 与 `server/layout_previews/`。左侧取消固定横向分栏，让待办与易经在同一连续区域使用共享的 40→22 px 正文字号；保留 x=392 竖线与 y=746 状态栏，不修改生产 renderer/API/Supabase/签名/cache，不部署、不 commit/push。
+
+- [x] 恢复现有 v2 preview、字体与 1-bit 600×800 基线
+- [x] 增加 flow 测量、动态分隔线、统一左侧正文字号及五个请求 PNG
+- [x] 复核 normal/压力图、元数据、边界与同 v2 的差异
+- [x] 运行 preview 完整性和项目回归；记录结论并保持本地未提交
+
+**Status:** complete — 5 requested flow PNGs produced; all are 600×800 mode-1 and unclipped. The 58 existing tests pass; no production file was changed, committed, pushed, or deployed.
+
+**Error note:** 初始 PowerShell `rg` 多 pattern 命令含 `|`，被 Windows 命令包装层当作管道解析，未得到目标函数的可靠检索结果；后续不用该形式，改用脚本内已读取的定点上下文和无管道检索。一次跨两份 planning 文档的 patch 因 `progress.md` 标题与预期不一致而整体未应用；已拆成两份精确补丁，未丢失记录。最终从 worktree 根复核 PNG 时误用了从 `server/` 起算的 venv 相对路径，PowerShell 未找到解释器；将改用根目录正确的两级上溯路径，不重试错误路径。
+
+## 三区布局 E1/E2/E3 与自动缩放预览（2026-10-02）
+
+**Goal:** 仅扩展 `server/layout_preview.py` 和本地 preview 输出，固定 600×800 三区/状态栏 geometry，比较 E1/E2/E3 大字号与逐区域自动缩放；不改生产 renderer、API、Supabase、签名、cache、Render 或 Nook。
+
+- [x] 恢复上轮 preview 工作树、固定几何与字体基线
+- [x] 新增 E1/E2/E3 的整卦/单爻固定字号预览
+- [x] 新增常规、待办压力、易经压力的自动缩放预览与字号元数据
+- [x] 验证 1-bit/600×800、悬挂缩进、边界、回归和 diff
+- [x] 记录字号比较与推荐；保持未提交、未部署
+
+**Status:** complete — 10 requested E/auto PNGs generated and reviewed locally; no production changes.
+
+**Error note:** Windows `cmd` 将带 `|` 的 `rg` 多模式 pattern 解析为管道；带空格的 quoted regex 也被 wrapper 拆分；不会重试同一形式，后续使用无空格单模式定点检索。一次 metadata 检查在 `server/` workdir 仍使用 `server/layout_previews/...` 而失败，改为 `layout_previews/...` 后复核成功。
+
+## Equal-height / No-label-column Auto Preview v2（2026-10-02）
+
+**Goal:** 将左侧分线移至 y=373，取消易经 label/body column，并生成四张 `layout_auto_v2_*` 本地自动缩放比较稿；不改生产 renderer、API、Supabase、签名、cache、Render 或 Nook。
+
+- [x] 固定 v2 geometry：x=392、y=373、footer y=746；右栏完整贯穿主体
+- [x] 改为 `【标签】正文` 普通 340 px 段落，移除预览中的 label 字号/粗体/悬挂缩进
+- [x] 生成常规整卦、单爻、8 条待办压力及长易经压力四张 v2 PNG
+- [x] 完成逐区域 2 px auto scale、标点换行修正、行数/裁断 metadata 和图面复核
+- [x] compile、PNG 完整性、58/58 unittest 与 diff check；保持未提交、未部署
+
+**Status:** complete — normal todo=42 px, todo stress=26 px, normal hexagram body=34 px, long Yijing body=24 px; all v2 previews are unclipped.
+
+**Error note:** 一次组合 planning/README patch 因已更新的 plan checklist 上下文不匹配而整体未应用；改为精确段落补丁，不重复同一 hunk。
+
+## Nook 600×800 分区信息屏版面与字号测试稿（2026-10-02）
+
+**Goal:** 仅生成可人工比较的 600×800 portrait、1-bit PNG 版面测试稿；不修改生产接口、动态 renderer、Supabase、缓存、签名 URL、Nook 或 Render 配置。
+
+- [x] 恢复工作树并定位实际 `codex/battery-display` worktree
+- [x] 核对现有 Todo renderer、字体资产、800×600 预旋转规则和测试基线
+- [x] 新增独立 layout preview 脚本与四组整卦/单爻预览及压力测试
+- [x] 检查所有输出尺寸、黑白模式、区域边界、悬挂缩进与溢出策略
+- [x] 记录字号、坐标、字体与人工比较结论；不提交、不部署
+
+**Status:** complete — 9 local preview PNGs generated and reviewed; production code paths remain untouched.
+
+**Notes:** 首次 session-catchup 的带引号 Windows `cmd` 调用把脚本路径拼进 workdir，未执行；改为无空格路径的独立调用后继续。一次三文件 planning patch 因 findings 标题与旧上下文不同而未应用；改为三个定点 patch 后成功，未覆盖任何记录。最终枚举时曾从 worktree 根误用 `layout_previews/`，改为 `server/layout_previews/` 后确认全部 11 个预览目录文件。
+
 ## 电量显示功能设计审计（2026-09-21）
 
 **Goal:** 只读核对 TRMNL Nook Client v0.16.0 的实际电池请求 header、当前 FastAPI 与动态 PNG 的版本/缓存边界，并给出最小电量显示方案；不修改业务代码、配置、Supabase、Nook 或部署，不提交。

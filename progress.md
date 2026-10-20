@@ -1,5 +1,82 @@
 # Progress Log
 
+## 2026-10-20 — Stage 2C Git 收尾（进行中）
+
+- 用户报告并确认 Stage 2C migration 已人工执行：`main.text` 和 `updated_at` 保留，`daily_reminder_text=''`、`yijing_position=0` 正常；本轮不再操作 Supabase。
+- 已清理不应提交的 fixed-v2/preview-only 源、所有生成 PNG 与 metadata；`server/.gitignore` 现忽略 `layout_previews/` 和 `production_previews/`。保留 `generate_flow_production_previews.py` 作为冻结 Flow renderer 的本地回归工具。
+- 正式数据库仍为 137,592 bytes，SHA-256 为 `B606AEAEED14B9CB9AF160B04B59A6BB23876FED12CF245BC9E03A94AF2CBD05`；当前位于 repository-root 相对部署路径，下一步暂存、完整回归、commit 与 non-force push。
+- 已暂存 28 个正式 Stage 2C 路径，正式 JSON 已为 Git index blob；未暂存/未提交 preview PNG、metadata、fixed-v2 helper 或实验 preview script。
+- 提交前回归通过：Python compile、64/384/2/450 catalog 统计、71/71 unittest、`editor.js`/`screen-store.js`/`yijing-content.js` syntax、staged/working `git diff --check`。敏感信息扫描无 `.env`、私钥、JWT 或真实 secret；唯一匹配为 `.env.example`、README 和测试的 placeholder/fake value。
+
+## 2026-10-02 — Stage 2C Right Reminder Gap and Yijing Glyph Width Review（进行中）
+
+- 已恢复 production Flow renderer 与当前 planning 状态。范围只包含右栏标题/正文实际 bbox 间距和卦象横向比例候选；左栏 fit、动态 divider、footer、数据库及服务链路均冻结。
+- 已生成五张 production preview 与卦象对照图。图面复核确认右栏间距和 +20% 首行均正常；对照图第一版的长宽度说明文字跨列重叠，需要改为更短的两行标注后再验收。
+- 已将对照图改为简短的 `六NN 三NN` 宽度标注，四列可清晰比较。production preview 的右栏首项实际间距为 16 px，reminder 仍为 50 px，最后一项 bbox bottom=454，未接近 footer limit=730。
+- 用户已最终选择并冻结 +20%（`1.20`）glyph width 与 16 px reminder title/body gap；五张 production preview 均重新生成，71/71 unittest、compileall、root JS syntax 与 `git diff --check` 通过。未 deploy、migration、commit 或 push。
+
+## 2026-10-20 — Stage 2C Frozen Layout and Deployment-Readiness Audit（进行中）
+
+- 用户已正式选择 glyph width multiplier `1.20` 与 reminder title/body gap `16 px`，并冻结 Flow 版式。
+- 已把未修改的同一 JSON 原样放入本 worktree 的 `yijing database/`，以 SHA-256 验证一致；loader 已移除父目录 fallback，只使用仓库根相对路径。该 JSON 仍未 Git 跟踪，后续未获用户授权前不会 commit/push。
+- 最终审计完成：64 卦、384 常规爻、乾用九/坤用六、总 450 页与 0..449 position 通过 runtime/tests 核对；编辑器边界无循环，renderer 不改变 position。迁移仅新增 daily reminder/Yijing position 及 authenticated 列 grant，不动 RLS/anon。
+- 已生成 `01_final_*` 至 `05_final_*` 五张冻结版 preview：均为 600×800 1-bit，无 overflow/truncation。服务端 footer 的 refresh minute 已确认来自成功 display 请求的 UTC 时钟、显示为 UTC+8，并进入 version/signed URL/cache-miss 重建路径；cache 保持两版本有界。
+- 最终离线验收：compileall PASS、unittest 71/71 PASS、`editor.js`/`screen-store.js`/`yijing-content.js` syntax PASS、preview mode/size/metadata PASS、`git diff --check` PASS。未执行 migration、deploy、commit、push 或 merge。
+
+## 2026-10-02 — Stage 2C Flow Typography Fit Efficiency Audit（完成）
+
+- 对五个 production sample 复核最终 shared `left_font_size` 与 `S+2` 高度预算；确认可用区 y=22..732（710 px）和 footer 安全边界没有重复扣除。
+- 找到唯一明确的效率问题：块高度把最后一行 trailing leading 重复计入。已用 `line_box_height` / `wrapped_lines_height` 修正左栏 title、todo、易经 heading/body 的预算及 draw 边界；未改动态 divider、右栏、footer、API、数据库、签名或 cache 设计。
+- 重新生成五张 `server/production_previews/01_flow_*.png` 至 `05_flow_*.png`：shared 字号为 30、40、26、24、22；均为 600×800、1-bit、无 overflow/truncation。
+- 新增预算回归测试；从 server cwd 全量 unittest 68/68 PASS，compileall PASS。仍未 deploy、migration、commit 或 push。
+
+## 2026-10-02 — Stage 2C Flow Layout 与正式易经数据库接线（进行中）
+
+- 用户已将正式方向改为 flow layout，并要求接入已导入的真实易经数据库；本轮允许本地 production code 与测试变更，但禁止执行 Supabase migration、连接线上凭据、部署、commit、push 或修改 Nook/TRMNL。
+- 已恢复当前 local-only worktree 与 planning 记录，开始审计数据库 schema 和现有 renderer/cache/signing 接线；fixed v2 仅作为待替换的本地历史实现保留。
+- 已完成 production flow 接线：`TodoRenderer` 不再导入 fixed-v2 helper 或使用固定 y=373；共享 flow helper 只固定 x=392、y=746，待办完结后计算 1 px divider。右栏与 800×600 预旋转路径保留。
+- 已从真实 JSON 构建 450 个 Yijing pages（64 整卦、384 常规爻、乾用九、坤用六），provider 验证正式范围，editor 由同一 JSON 异步加载导航 metadata。未更改任何经典正文。
+- 已把 server-confirmed `/api/display` 时间以 UTC+8 `更新 HH:MM` 接入 renderer；有界 cache/version/HMAC URL 新增签名 `r` minute state，未改变 Supabase 字段或 Nook 请求协议。
+- 已从正式 renderer 生成并目视检查五张 `01_flow_…` 至 `05_flow_…` 预览和 `flow_metadata.json`。初轮/定点测试已通过，正在完成全量 compile、JS、image、secret 与 diff 验收；未执行 migration、部署、commit 或 push。
+- 最终验收通过：`compileall`、全部 66 个 unittest（API 18 + provider/catalog/security 35 + renderer 13）、根目录 JS `node --check`、五张 preview 的 mode `1`/600×800 校验、`git diff --check` 与 `.env`/非 placeholder `sb_secret_` 模式扫描均通过。当前 `git status` 按用户要求保持本地 dirty；未执行 migration、未部署、未 commit、未 push。
+
+## 2026-10-02 — Stage 2C Flow Shared Typography Correction（完成）
+
+- 按用户确认的 shared-size coupling 修正左栏：标题、待办、易经 heading/卦名/爻名与全部正文统一为一次求解的 `left_font_size`；仅粗体表达层级。右栏、divider、footer、数据库、API、签名/cache、Supabase 未改。
+- 重新生成五张 production preview：shared left font 28、40、24、24、22；reminder 均 50；divider y 215、340、301、185、283；全部 600×800 mode-1、无 overflow/truncation。
+- 67/67 unittest、compileall、JS syntax、图像校验、secret scan、git diff --check 通过。极端 160 行无法在共享最小字号完整容纳时改为安全报错，绝不截断；本轮仍未 migration/deploy/commit/push。
+
+## 2026-10-02 — Fixed v2 Production Renderer Wiring（进行中）
+
+- 用户已明确选定 fixed v2 为生产默认，flow 仅保留本地极端内容候选。本轮可修改正式 renderer/最小状态接线，但不得部署、commit、push 或改动线上 Supabase。
+- 已核对：当前网页/store 与 Supabase provider 只使用 `screen_state.text`；无提醒/易经位置字段或正式易经 catalog。将通过本地 migration 和两页用户已给测试内容完成最小验证，不新增表、不改 RLS。
+- 已生成第一版五张直接经 production renderer 绘制的 upright review PNG；fixed-v2 双压力 todo=26 px、Yijing=24 px，完整且无 fallback。图面检查发现 `☰` 缺字方框，已按既有 preview 的 1-bit 线条兼容策略修正 production header，正在重新生成复核。
+- fixed v2 production wiring 完成：新增 shared layout helper，renderer 默认固定 x=392/y=373/footer=746，各区独立 fit；flow 未被 production 导入。最小字号仍 overflow 时只记录 warning 并以省略号保护边界，不自动切换 flow。
+- 已加入本地待执行 `supabase/stage-2c-fixed-v2-state.sql`、每日提醒与手动易经 position editor controls、两页最小乾卦 catalog；未执行 SQL，未连接线上 Supabase。未改 API、签名算法、cache key、Nook 或 Render。
+- 最终验证：compileall、66/66 unittest、所有根目录 JS `node --check`、五图重新生成及 1-bit/600×800 metadata、`git diff --check`、secret scan 均通过。未 commit、push 或 deploy。
+
+## 2026-10-02 — 连续流式左区 Preview（进行中）
+
+- 已在 `server/layout_preview.py` 新增纯本地的 flow study：待办/易经正文共享 40→22 px、每次减 2 px 的选择器，标题固定 40 px，右侧提醒保持原独立 50→24 px 规则。
+- 已生成请求的五张 `layout_flow_*.png`，并写入 `layout_metadata.json`；当前初检均为完整、不裁断的 600×800、mode `1` PNG。
+- 已目视检查常规整卦和双压力结果；尚待逐图复核、与 v2 精确比较及回归检查。未触及生产 renderer/API/Supabase/签名/cache，也未 commit/push/deploy。
+- 完成复核：flow normal hexagram=36 px、line=40 px、todo stress=32 px、Yijing stress=32 px、both stress=26 px，五图均无省略或跨区。相较 v2，flow 给长待办 +6 px、给长易经 +8 px，但会使同一待办随易经篇幅缩放，并让动态线在 y=246..402 之间移动。
+- 已通过 `compileall`、预览生成及 600×800/mode-1 校验、全部 `unittest` 58/58、`git diff --check`。生产 renderer/API/Supabase/签名/cache diff 为空；只保留本地 preview 脚本、PNG/metadata/说明和 planning 记录，未 commit/push/deploy。
+
+## Session: 2026-10-02 — Nook 600×800 layout preview
+
+- **Status:** in_progress — visual-layout work only.
+- 已在 `codex/battery-display` worktree 中核对项目结构、生产 Todo renderer、字体许可、旋转规则与 renderer/API 测试；未改动任何正式业务代码或外部配置。
+- 发现父项目根当前是旧 `master` 工作树；预览产物将仅放入拥有现行 renderer 的隔离 worktree，避免误改历史树。
+- 首轮预览中 bundled Noto 的 `䷀`/`☰` 为缺字方框，系统 symbol fallback 也不能可靠表现六爻；已改为 preview-only 的 1-bit 乾卦/乾三爻几何线条。未改生产字体、renderer 或依赖；该字体覆盖问题将列入最终观察结果。
+- 新增独立 `server/layout_preview.py` 与 `server/layout_previews/`：生成 A/B/C/D 各整卦页、单爻页及一张压力图；所有文件均为未旋转的 600×800 portrait 1-bit PNG，未被 production app 导入。
+- 完成脚本 compile、生成后 PNG 完整性检查、既有 unittest 58/58 与 `git diff --check`；未执行 git commit、push、Render 部署、Supabase 或 Nook 操作。
+- 已开始第二轮 E1/E2/E3 与自动缩放视觉比较；固定 40 px 标题保持不缩放。发现 40 px 两字标签大于固定 label/body 槽宽，E3 采用 preview-only 竖排标签，自动模式将基于可用宽度降级并记录实际字号。
+- 已完成 6 张 E1/E2/E3 与 4 张 auto PNG：常规 auto 为 todo=32/reminder=50/header=40/label=34/body=40；todo stress 为 todo=24 且末行省略；yijing stress 为 body=24 且完整。E3 整卦页触发易经截断；E1 是固定字号中唯一保持常规整卦完整且采用横排标签的版本。
+- 第二轮也完成 preview compile、所有生成 PNG 的 600×800/mode-1 检查、既有 unittest 58/58 与 `git diff --check`。未执行 commit、push、部署或任何生产配置操作。
+- 第三轮开始：新增等高左区与无标签列 v2 auto preview；首轮图面发现 preview-only 中文逐字换行会孤立行首句读，正以最小禁则修复后重新复核。生产 renderer/API 不受影响。
+- v2 复核完成：在 `y=373` 等高左区，常规待办自动使用 42 px、8 条压力待办 26 px 且均无截断；常规整卦正文为 34 px、长文压力为 24 px，均无跨区或状态栏侵入。preview-only wrap 已避免孤立行首标点与不自然 `勿。`/`用` 拆分。
+
 ## Session: 2026-09-21 — Nook 电量显示本地实现
 
 - 从最新 `origin/main@f3a6551` 建立独立 `codex/battery-display` 分支，并保留上一轮三份未提交电量审计记录。
