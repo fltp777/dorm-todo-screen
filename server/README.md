@@ -4,10 +4,10 @@ Status: **COMPLETED / VERIFIED**. Stage 2B-1 remains device-verified, and the St
 
 Battery display addition: **LOCAL IMPLEMENTATION ONLY**. It has automated local coverage but has not been deployed to Render or device-verified.
 
-Stage 2C flow information screen wiring: **LOCAL IMPLEMENTATION ONLY**. The
-user has manually executed and verified the Supabase schema migration; the
-renderer/editor/server code itself has not been deployed to Render or refreshed
-on the Nook.
+Stage 2C flow information screen: **COMPLETED / VERIFIED**. The user reports
+that the Flow/Yijing screen has been deployed and verified on the Nook. The
+night-sleep schedule below remains local implementation only until separately
+deployed and device-tested.
 
 ```text
 screen_state.main
@@ -64,7 +64,7 @@ The signature is URL-safe Base64 without padding and is verified with `hmac.comp
 | `NOOK_DEVICE_ID` | yes | Device ID expected in the `ID` header |
 | `NOOK_API_KEY` | yes | Existing Nook `access-token` secret |
 | `PUBLIC_BASE_URL` | deployment | Public HTTPS origin without `/api` |
-| `REFRESH_RATE_SECONDS` | no | Nook refresh interval; default/minimum 300/60 |
+| `REFRESH_RATE_SECONDS` | no | Daytime Nook refresh interval; default/minimum 1800/60 |
 | `SUPABASE_URL` | yes | Supabase project URL |
 | `SUPABASE_SECRET_KEY` | yes | Render-only new-format `sb_secret_...` key |
 | `SCREEN_SIGNING_SECRET` | yes | Independent high-entropy HMAC secret, at least 32 characters |
@@ -102,6 +102,22 @@ Do not use a real Supabase key for automated tests. Tests inject fake providers 
 `/api/display` never returns content text. A provider or renderer failure returns the most recent successful artifact when available; a cold process with no successful artifact returns 503.
 
 The process-local cache holds at most two successful versions. A render version includes content `updated_at`, request battery state, and the successful `/api/display` response minute. On a cache miss, the image endpoint rebuilds only when signed `v`, `b`, and `r` still match; stale URLs return 410.
+
+## Dynamic night sleep schedule
+
+`REFRESH_RATE_SECONDS` remains the normal daytime interval (currently 1800
+seconds). Each successful `/api/display` response independently chooses its
+next delay using an explicit Asia/Shanghai UTC+8 business clock:
+
+- `[07:10, 22:40)` returns the configured daytime value.
+- From `22:40` through the following `07:09`, it returns the exact positive
+  number of seconds until the next local `07:10`.
+
+Nighttime requests still render and sign the current image normally; only the
+response's existing `refresh_rate` field changes. The schedule does not change
+the footer time, URL TTL, signed URL shape, cache key, or cache size. A schedule
+calculation failure logs a warning and falls back to the configured daytime
+value, rather than failing the display request.
 
 ## Stage 2C flow renderer
 
@@ -153,4 +169,4 @@ SUPABASE_SECRET_KEY
 SCREEN_SIGNING_SECRET
 ```
 
-`SCREEN_URL_TTL_SECONDS=900` remains optional. The existing Nook/public URL variables are retained, and the current tested refresh interval is 300 seconds. The real editor → Supabase → Render → signed PNG → Nook chain is verified. Render Free spin-down/cold-start behavior has not yet been observed long term, Auto-Deploy is currently Off, and the long-term refresh interval is not yet decided.
+`SCREEN_URL_TTL_SECONDS=900` remains optional. The existing Nook/public URL variables are retained, and the configured daytime refresh interval is 1800 seconds. The real editor → Supabase → Render → signed PNG → Nook chain is verified. Render Free spin-down/cold-start behavior has not yet been observed long term, Auto-Deploy is currently Off, and the night-sleep schedule remains pending deployment/device validation.

@@ -16,7 +16,7 @@ class Settings:
     device_id: str
     api_key: str
     public_base_url: str | None = None
-    refresh_rate_seconds: int = 300
+    refresh_rate_seconds: int = 1800
     supabase_url: str = ""
     supabase_secret_key: str = ""
     screen_signing_secret: str = ""
@@ -27,9 +27,9 @@ class Settings:
         public_base_url = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/") or None
 
         try:
-            refresh_rate = int(os.getenv("REFRESH_RATE_SECONDS", "300"))
+            refresh_rate = int(os.getenv("REFRESH_RATE_SECONDS", "1800"))
         except ValueError:
-            refresh_rate = 300
+            refresh_rate = 1800
 
         try:
             screen_url_ttl = int(os.getenv("SCREEN_URL_TTL_SECONDS", "900"))

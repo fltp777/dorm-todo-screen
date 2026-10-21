@@ -1,5 +1,18 @@
 # Task Plan: Stage 2B-2 实机验收 checkpoint
 
+## Stage 2C 夜间长睡眠 / 动态 refresh_rate（2026-10-21）
+
+**Goal:** 在不改变图片、版式、签名、缓存、Supabase、Nook 客户端或 Render 配置的前提下，令 `/api/display` 以 Asia/Shanghai 业务时间返回动态 `refresh_rate`：07:10–22:39 为白天 interval，其他时刻精确睡至下一次 07:10。
+
+- [x] 从已含 Stage 2C 的最新 `origin/main` 创建 `codex/night-sleep` 分支
+- [x] 新增纯 schedule 函数与异常 fallback，不改变 API contract
+- [x] 添加边界、跨日/月/年与 route fallback 测试
+- [x] 更新必要文档与 planning 记录，运行完整本地回归
+
+**Status:** complete — 本轮本地实现/测试已完成；用户现已授权仅做本分支的 commit/push 收尾。不部署、不 merge、不改 Supabase，也暂缓 180° 旋转。
+
+**Error note:** 根 checkout 是旧 `master` 且含用户既有未提交 planning 文档，未触碰；受限沙箱拒绝根仓库 `FETCH_HEAD` 写入，已在获授权的本机 Git 环境执行只读 fetch 后确认 `origin/main` 包含 Stage 2C。Windows Python 未安装 IANA `tzdata`，首次 `ZoneInfo("Asia/Shanghai")` 导入失败；已改用项目现有的显式 UTC+8 named timezone，避免 host tzdata 依赖。一次仅用于报告的内嵌 f-string 表格命令转义失败，改用 here-string 后正确输出，未影响代码或测试。本轮 Git 收尾起始时有一次只读 Git/status 命令误在 skill 目录运行并返回“not a git repository”；未修改项目，随后已在本 worktree 正确重跑。
+
 ## Stage 2C Git 收尾（2026-10-20）
 
 **Goal:** 用户已人工执行并验证 Stage 2C Supabase migration；清理纯本地预览产物，纳入正式 Flow/易经/迁移代码与数据库，完成最终回归，创建 commit 并仅 push 当前工作分支。
@@ -8,9 +21,9 @@
 - [x] 删除 fixed-v2/local preview 源与生成 PNG，并以 `server/.gitignore` 排除可再生 preview 输出
 - [x] 暂存正式 Stage 2C 文件，确认 JSON 已 Git tracked
 - [x] 完成 compile、unittest、JS、diff、secret 与 450 页目录复核
-- [ ] 创建 Stage 2C commit，non-force push 当前分支并确认远端
+- [x] 创建 Stage 2C commit，non-force push 当前分支并确认远端
 
-**Status:** in progress — 用户报告 migration 已人工执行并验证；不部署、不 merge、不修改 Supabase。
+**Status:** complete — `b5263a218cf1b231968a79315def3c1282bfcf90` 已 non-force push 至 `codex/battery-display`，随后作为 PR #5 merge 到 `origin/main`；用户报告 migration 已人工执行并验证。
 
 **Error note:** linked worktree 的 `.git/worktrees/...` 元数据在受限沙箱内拒绝 `git fetch` 的 `FETCH_HEAD` 与 `git add` 的 `index.lock` 写入；经用户授权在本机正常 Git 环境中完成，未使用 force。一次目录统计从仓库根导入 server module 而找不到 `yijing_catalog`；改从 `server/` cwd 后通过，未改代码。
 

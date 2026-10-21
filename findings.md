@@ -1,5 +1,15 @@
 # Findings & Decisions — through Stage 2B-2 verification
 
+## Stage 2C 夜间长睡眠 / 动态 refresh_rate（2026-10-21，Git 收尾中）
+
+- Stage 2C 已由用户报告上线并在 Nook 真机验收；当前 `origin/main` 是 PR #5 merge commit `dce97ee`，包含 `b5263a2` 的 Flow/Yijing 代码。本轮从该 main 新建 `codex/night-sleep`，不把无关历史追加到旧 battery 分支。
+- 时间表是业务规则而不是图片内容：Asia/Shanghai 的 `[07:10, 22:40)` 返回现有白天 refresh interval；`>=22:40` 或 `<07:10` 计算到下一次 07:10 的实际秒数。夜间请求仍正常读内容、签图和响应，只改变 response 的 `refresh_rate`。
+- 180° 旋转明确暂缓；本轮不得修改 Flow layout、易经、editor、schema、battery/footer、signed URL/cache、Nook/TRMNL 或 Render keepalive。
+- `ZoneInfo("Asia/Shanghai")` 在当前 Windows Python 缺少 `tzdata` 时不可用。项目已有的明确 `timezone(timedelta(hours=8), name="Asia/Shanghai")` 不依赖本机 locale 或 IANA 数据库；中国业务时钟没有 DST 转换需求，因此本轮作为等价、可移植实现使用。
+- `server/refresh_schedule.py` 的 `compute_refresh_rate(now, daytime_refresh_seconds)` 是纯函数。它在 `[07:10, 22:40)` 返回配置 interval，夜间用 `datetime.combine`/`timedelta` 求下一次 07:10 并向上取整秒数。route 在该函数抛错时仅记录无敏感信息 warning 并回退到配置值，正常图片/签名/缓存仍完成。
+- `REFRESH_RATE_SECONDS` 默认值与示例调整为 1800，仍只代表白天 interval；没有新增环境变量或配置系统。API JSON 字段、signed URL 的 `v/b/r/exp/sig`、cache key/上限和 refresh footer 均未修改。
+- 收尾前复核的工作树差异仅限 schedule 模块、`/api/display` 的 response 字段计算、1800 默认/示例、对应 API/schedule 测试，以及 README/planning 文档；没有 renderer、签名、cache、Supabase、前端或 cron-job.org 文件变化。
+
 ## Stage 2C Right Reminder Gap and Yijing Glyph Width Review（2026-10-02，进行中）
 
 - 当前右栏标题从 `FLOW.content_top_y` 绘制，但正文起点复用了左栏 `_title_end_y(40)`，未使用 `stroke_width=1` 的实际标题 bbox；这使标题与第一条提醒之间仅保留很小的视觉空白。

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import secrets
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
@@ -13,6 +14,7 @@ from fastapi.responses import FileResponse
 from config import Settings, normalize_device_id
 from content import battery_percent_from_state
 from display_service import DisplayService, DisplayUnavailable, StaleContentVersion
+from refresh_schedule import compute_refresh_rate
 from security.signed_url import SignedImageURL
 
 router = APIRouter()
@@ -32,6 +34,15 @@ def _get_display_service(request: Request) -> DisplayService:
 
 def _get_image_signer(request: Request) -> SignedImageURL:
     return request.app.state.image_signer
+
+
+def _response_refresh_rate(settings: Settings) -> int:
+    """Keep a scheduling error from interrupting an otherwise valid refresh."""
+    try:
+        return compute_refresh_rate(datetime.now(timezone.utc), settings.refresh_rate_seconds)
+    except Exception:
+        logger.warning("Falling back to configured refresh rate after schedule calculation failure")
+        return settings.refresh_rate_seconds
 
 
 def parse_battery_percent(value: str | None) -> int | None:
@@ -111,7 +122,7 @@ def display(
         "status": 0,
         "image_url": f"{base_url}{signed_path}",
         "filename": f"todo-{artifact.version}.png",
-        "refresh_rate": settings.refresh_rate_seconds,
+        "refresh_rate": _response_refresh_rate(settings),
     }
 
 

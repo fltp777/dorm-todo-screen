@@ -209,9 +209,9 @@ Supabase text + updated_at
 
 - Stage 2B-1（已实机验证）：Nook → BYOS API → 固定测试图。
 - Stage 2B-2（已实机验证）：真实 Supabase text → 服务端动态黑白图片 → signed image URL → Nook。
-- Stage 2C（后续）：完善刷新、睡眠、唤醒和长期运行能力。
+- Stage 2C（Flow/Yijing 已上线并通过 Nook 真机验收）：继续完善刷新、睡眠、唤醒和长期运行能力；夜间动态 refresh_rate 仍待本地实现验证后单独部署。
 
-当前已验证刷新间隔仍为 300 秒，且 Render Auto-Deploy 人为设为 Off。校园网 PEAP、Render Free spin-down / cold-start 长期表现、正式日常刷新周期、长期供电与外壳安装仍待后续处理；poetry、quote、countdown 和 calendar 尚未实现。这些事项不影响 Stage 2B-2 的 VERIFIED 结论。
+当前白天 `REFRESH_RATE_SECONDS=1800`（30 分钟），且 Render Auto-Deploy 人为设为 Off。cron-job.org 保持 07:00–22:50 每 10 分钟 `/health` keepalive；校园网 PEAP、Render Free spin-down / cold-start 长期表现、夜间动态 refresh_rate 的实机验证、长期供电与外壳安装仍待后续处理；poetry、quote、countdown 和 calendar 尚未实现。
 
 硬件端不得重新开放 anon SELECT。`/api/display` 使用独立 device ID/API key；固定校准图继续公开用于诊断，真实内容图使用短期 HMAC 签名 URL，因为 v0.16.0 下载图片时不转发认证 header。
 
