@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
@@ -55,7 +56,7 @@ class ByosApiTests(unittest.TestCase):
             device_id="AA:BB:CC:DD:EE:FF",
             api_key="test-only-nook-key",
             public_base_url="https://byos.example.test",
-            refresh_rate_seconds=300,
+            refresh_rate_seconds=1800,
             supabase_url="https://project.example.supabase.co",
             supabase_secret_key="sb_secret_test-only-placeholder",
             screen_signing_secret="test-signing-secret-value-that-is-long",
@@ -92,7 +93,9 @@ class ByosApiTests(unittest.TestCase):
         self.assertEqual(response.json(), {"status": "ok"})
 
     def test_display_returns_dynamic_signed_url_and_refresh_rate(self) -> None:
-        response = self.display("63")
+        with patch("api.routes._response_refresh_rate", return_value=1800) as refresh_rate:
+            response = self.display("63")
+        refresh_rate.assert_called_once_with(self.settings)
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         parsed = urlparse(payload["image_url"])
@@ -101,12 +104,26 @@ class ByosApiTests(unittest.TestCase):
         self.assertEqual(set(query), {"v", "b", "r", "exp", "sig"})
         self.assertEqual(query["b"], ["63"])
         self.assertRegex(query["r"][0], r"^[0-9]+$")
-        self.assertEqual(payload["refresh_rate"], 300)
+        self.assertEqual(payload["refresh_rate"], 1800)
         self.assertTrue(payload["filename"].startswith("todo-"))
         serialized = response.text
         self.assertNotIn(self.provider.content.body, serialized)
         self.assertNotIn(self.settings.supabase_secret_key, serialized)
         self.assertNotIn(self.settings.screen_signing_secret, serialized)
+
+    def test_display_returns_the_computed_night_refresh_rate(self) -> None:
+        with patch("api.routes._response_refresh_rate", return_value=30_600) as refresh_rate:
+            response = self.display("63")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["refresh_rate"], 30_600)
+        refresh_rate.assert_called_once_with(self.settings)
+
+    def test_display_falls_back_when_schedule_calculation_fails(self) -> None:
+        with patch("api.routes.compute_refresh_rate", side_effect=RuntimeError("clock failure")):
+            with self.assertLogs("api.routes", level="WARNING"):
+                response = self.display("63")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["refresh_rate"], 1800)
 
     def test_display_rejects_wrong_key(self) -> None:
         response = self.client.get(

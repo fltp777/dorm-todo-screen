@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-10-21 — Stage 2C 夜间长睡眠 / 动态 refresh_rate（Git 收尾中）
+
+- 用户确认 Stage 2C 已上线并通过 Nook 真机验收，当前暂缓 180° 旋转。本轮范围仅为 `/api/display` 的夜间动态 `refresh_rate`。
+- 已 fetch 并确认 `origin/main=dce97ee` 含 Stage 2C；现有干净 worktree 已从该提交切换至新分支 `codex/night-sleep`。根 checkout 的旧 `master` 和用户未提交文档未被触碰。
+- 计划使用标准库 `ZoneInfo("Asia/Shanghai")` 与可注入的 timezone-aware datetime 做纯函数测试；不等待真实夜间、不调用线上服务、不改 cron 或 Render。
+- 已新增 `server/refresh_schedule.py`，改用项目现有的显式 named UTC+8 timezone（当前 Windows Python 缺 IANA tzdata）；白天 `[07:10,22:40)` 返回 `REFRESH_RATE_SECONDS=1800`，夜间精确睡至下一次 07:10。`/api/display` 仅以该结果填充已有 `refresh_rate`；schedule 失败 warning 后安全回退为 1800。
+- 新增 `tests/test_refresh_schedule.py` 的白天、精确边界、午夜、月末、年末、闰日、UTC 输入和非法输入测试，并补充 API 动态结果/fallback 测试。提交前已再次运行 compile、JS syntax、`git diff --check` 和全套 unittest，78/78 均通过；hard-secret scan 无私钥、GitHub token 或 JWT-shaped secret，`.env` 不存在，`.env.example` 仅保留占位值。
+- 模拟时间表：06:50→1200（07:10）；07:10→1800；12:00→1800；22:40→30600（次日 07:10）；23:30→27600（次日 07:10）。未 deploy、push、merge、修改 Supabase、cron、Nook/TRMNL 或 180° rotation。
+
 ## 2026-10-20 — Stage 2C Git 收尾（进行中）
 
 - 用户报告并确认 Stage 2C migration 已人工执行：`main.text` 和 `updated_at` 保留，`daily_reminder_text=''`、`yijing_position=0` 正常；本轮不再操作 Supabase。
